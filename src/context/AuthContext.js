@@ -1,177 +1,219 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { API_URL } from '../api/config';
+import { API_URL, ENDPOINTS } from './api/config';
 
+// Create the context
 const AuthContext = createContext();
 
+// Custom hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
+// Provider component
 export const AuthProvider = ({ children }) => {
   const [authState, setAuthState] = useState({
     authenticated: false,
     user: null,
-    token: null,
+    loading: true,
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check if user is logged in on app start
+  // Check if the user is already logged in on app start
   useEffect(() => {
-    const loadUserFromStorage = async () => {
+    const loadStoredAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
+        // Load user data from AsyncStorage
         const userData = await AsyncStorage.getItem('user');
         
-        if (token && userData) {
-          setAuthState({
-            authenticated: true,
-            user: JSON.parse(userData),
-            token,
-          });
+        if (userData) {
+          const user = JSON.parse(userData);
           
-          // Set auth header for all requests
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          // Setup axios with credentials
+          axios.defaults.withCredentials = true;
+          
+          // Check if the session is still valid
+          try {
+            const response = await axios.get(`${API_URL}${ENDPOINTS.USER_INFO}`);
+            if (response.data) {
+              // Session is valid, update user data if needed
+              const updatedUser = { ...user, ...response.data };
+              await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+              
+              setAuthState({
+                authenticated: true,
+                user: updatedUser,
+                loading: false,
+              });
+            } else {
+              // Session is invalid, clear storage
+              await AsyncStorage.removeItem('user');
+              setAuthState({
+                authenticated: false,
+                user: null,
+                loading: false,
+              });
+            }
+          } catch (error) {
+            // API error, assume session expired
+            await AsyncStorage.removeItem('user');
+            setAuthState({
+              authenticated: false,
+              user: null,
+              loading: false,
+            });
+          }
+        } else {
+          setAuthState({
+            authenticated: false,
+            user: null,
+            loading: false,
+          });
         }
       } catch (error) {
-        console.log('Error loading auth state:', error);
-      } finally {
-        setIsLoading(false);
+        console.error('Error loading authentication state:', error);
+        setAuthState({
+          authenticated: false,
+          user: null,
+          loading: false,
+        });
       }
+      
+      setIsLoading(false);
     };
 
-    loadUserFromStorage();
+    loadStoredAuth();
   }, []);
 
   // Login function
   const login = async (email, password) => {
     try {
-      setIsLoading(true);
-      const response = await axios.post(`${API_URL}/api/login`, { email, password });
+      // Set axios to send cookies
+      axios.defaults.withCredentials = true;
+      
+      const response = await axios.post(`${API_URL}${ENDPOINTS.LOGIN}`, {
+        email,
+        password,
+      });
       
       if (response.data.success) {
-        // Mock token since your API doesn't seem to return one
-        const token = 'mock-session-token';
-        
-        // Get user info
-        const userResponse = await axios.get(`${API_URL}/api/user-info`, {
-          headers: { 'Cookie': `session_token=${token}` }
-        });
+        // Get user info after login
+        const userInfoResponse = await axios.get(`${API_URL}${ENDPOINTS.USER_INFO}`);
         
         const user = {
-          email,
-          name: userResponse.data.name || email,
+          id: response.data.id || null,
+          email: email,
+          name: userInfoResponse.data?.name || email.split('@')[0], // Fallback to email username
         };
         
-        await AsyncStorage.setItem('token', token);
+        // Store user data
         await AsyncStorage.setItem('user', JSON.stringify(user));
         
-        // Set auth header for all requests
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+        // Update state
         setAuthState({
           authenticated: true,
           user,
-          token,
+          loading: false,
         });
         
         return { success: true };
       } else {
         return { 
-          success: false,
+          success: false, 
           message: response.data.message || 'Login failed'
         };
       }
     } catch (error) {
+      console.error('Login error:', error);
       return { 
-        success: false,
+        success: false, 
         message: error.response?.data?.message || 'Network error'
       };
-    } finally {
-      setIsLoading(false);
     }
   };
 
   // Register function
   const register = async (name, email, password, confirmPassword) => {
     try {
-      setIsLoading(true);
-      const response = await axios.post(`${API_URL}/api/register`, {
+      const response = await axios.post(`${API_URL}${ENDPOINTS.REGISTER}`, {
         name,
         email,
         password,
-        confirm_password: confirmPassword
+        confirm_password: confirmPassword,
       });
       
-      return {
+      return { 
         success: response.data.success,
         message: response.data.message
       };
     } catch (error) {
+      console.error('Registration error:', error);
       return { 
-        success: false,
+        success: false, 
         message: error.response?.data?.message || 'Network error'
       };
-    } finally {
-      setIsLoading(false);
     }
   };
 
   // Logout function
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('token');
+      // Call logout endpoint
+      await axios.get(`${API_URL}${ENDPOINTS.LOGOUT}`);
+      
+      // Clear local storage
       await AsyncStorage.removeItem('user');
       
-      // Remove auth header
-      delete axios.defaults.headers.common['Authorization'];
-      
+      // Update state
       setAuthState({
         authenticated: false,
         user: null,
-        token: null,
+        loading: false,
       });
-      
-      // Call logout endpoint
-      await axios.get(`${API_URL}/logout`);
-      
-      return { success: true };
     } catch (error) {
-      console.log('Logout error:', error);
-      return { success: false, message: 'Error during logout' };
+      console.error('Logout error:', error);
+      
+      // Even if API fails, clear local state
+      await AsyncStorage.removeItem('user');
+      setAuthState({
+        authenticated: false,
+        user: null,
+        loading: false,
+      });
     }
   };
 
-  // Update user profile
-  const updateProfile = async (userData) => {
+  // Update profile function
+  const updateProfile = async (profileData) => {
     try {
-      setIsLoading(true);
-      // Update user data in AsyncStorage
-      const currentUser = JSON.parse(await AsyncStorage.getItem('user'));
-      const updatedUser = { ...currentUser, ...userData };
-      
+      // Update locally first
+      const updatedUser = { ...authState.user, ...profileData };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       
       setAuthState({
         ...authState,
-        user: updatedUser
+        user: updatedUser,
       });
       
       return { success: true };
     } catch (error) {
+      console.error('Update profile error:', error);
       return { success: false, message: 'Failed to update profile' };
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const value = {
+  // Provide auth context value
+  const authContextValue = {
     authState,
     isLoading,
     login,
     register,
     logout,
-    updateProfile
+    updateProfile,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={authContextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

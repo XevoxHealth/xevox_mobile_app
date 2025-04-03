@@ -13,22 +13,11 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
-import { getHealthData, formatHealthStatus } from '../api/healthData';
+import { getHealthData, formatHealthStatus, getAvailableMetrics } from '../api/healthData';
 import { getHealthRecommendations, getHealthObservations } from '../api/chatbot';
+import { HEALTH_METRICS } from '../api/config';
 
 const screenWidth = Dimensions.get('window').width;
-
-// Define metrics to display
-const metrics = [
-  { id: 'steps', title: 'Steps', icon: 'footsteps', unit: 'steps', description: 'Total daily steps' },
-  { id: 'heartRate', title: 'Heart Rate', icon: 'heart', unit: 'BPM', description: 'Average heart rate' },
-  { id: 'sleep', title: 'Sleep', icon: 'bed', unit: 'hours', description: 'Total sleep duration' },
-  { id: 'stress', title: 'Stress', icon: 'fitness', unit: 'level', description: 'Stress level' },
-  { id: 'hrv', title: 'HRV', icon: 'pulse', unit: 'ms', description: 'Heart rate variability' },
-  { id: 'caloriesBurned', title: 'Calories', icon: 'flame', unit: 'kcal', description: 'Total calories burned' },
-  { id: 'pulseOx', title: 'Blood Oxygen', icon: 'water', unit: '%', description: 'Blood oxygen saturation' },
-  { id: 'bloodPressure', title: 'Blood Pressure', icon: 'speedometer', unit: 'mmHg', description: 'Blood pressure' },
-];
 
 const HealthDataScreen = ({ route, navigation }) => {
   const { authState } = useAuth();
@@ -39,6 +28,7 @@ const HealthDataScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [observations, setObservations] = useState('');
   const [recommendations, setRecommendations] = useState('');
+  const [availableMetrics, setAvailableMetrics] = useState(HEALTH_METRICS);
 
   const loadData = async () => {
     try {
@@ -47,6 +37,15 @@ const HealthDataScreen = ({ route, navigation }) => {
       // Fetch health data
       const data = await getHealthData(timeframe, authState.user?.id);
       setHealthData(data);
+      
+      // Update available metrics based on returned data
+      const filteredMetrics = getAvailableMetrics(data, HEALTH_METRICS);
+      setAvailableMetrics(filteredMetrics);
+      
+      // If selected metric is not available, select the first available one
+      if (filteredMetrics.length > 0 && !data[selectedMetric]?.values?.length) {
+        setSelectedMetric(filteredMetrics[0].id);
+      }
       
       // Fetch insights
       const obsResponse = await getHealthObservations();
@@ -112,7 +111,7 @@ const HealthDataScreen = ({ route, navigation }) => {
   };
 
   // Find current metric details
-  const currentMetric = metrics.find(m => m.id === selectedMetric) || metrics[0];
+  const currentMetric = availableMetrics.find(m => m.id === selectedMetric) || availableMetrics[0];
   
   // Get status formatting for current metric
   const getStatusInfo = () => {
@@ -206,7 +205,7 @@ const HealthDataScreen = ({ route, navigation }) => {
           showsHorizontalScrollIndicator={false}
           style={styles.metricsScroll}
         >
-          {metrics.map((metric) => (
+          {availableMetrics.map((metric) => (
             <TouchableOpacity
               key={metric.id}
               style={[
@@ -236,8 +235,8 @@ const HealthDataScreen = ({ route, navigation }) => {
         <View style={styles.metricDetailCard}>
           <View style={styles.metricDetailHeader}>
             <View style={styles.metricTitleContainer}>
-              <Icon name={currentMetric.icon} size={28} color="#4F46E5" />
-              <Text style={styles.metricDetailTitle}>{currentMetric.title}</Text>
+              <Icon name={currentMetric?.icon || 'help-circle'} size={28} color="#4F46E5" />
+              <Text style={styles.metricDetailTitle}>{currentMetric?.title || 'Unknown'}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: `${color}20` }]}>
               <Icon name={icon} size={16} color={color} />
@@ -247,13 +246,13 @@ const HealthDataScreen = ({ route, navigation }) => {
             </View>
           </View>
           
-          <Text style={styles.metricDescription}>{currentMetric.description}</Text>
+          <Text style={styles.metricDescription}>{currentMetric?.description || 'No description available'}</Text>
           
           <View style={styles.valueContainer}>
             <Text style={styles.valueLabel}>Current</Text>
             <Text style={styles.valueNumber}>
               {healthData?.[selectedMetric]?.average || 0}
-              <Text style={styles.valueUnit}> {currentMetric.unit}</Text>
+              <Text style={styles.valueUnit}> {currentMetric?.unit || ''}</Text>
             </Text>
           </View>
           

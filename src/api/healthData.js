@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_URL, ENDPOINTS } from './config';
 
-// Get health data
+// Get health data from SpikeAPI backend
 export const getHealthData = async (timeframe = 'day', userId) => {
   try {
     const response = await axios.get(`${API_URL}${ENDPOINTS.HEALTH_DATA}`, {
@@ -48,4 +48,15 @@ export const formatHealthStatus = (metric, status) => {
   };
   
   return statusMap[status] || statusMap.unknown;
+};
+
+// Filter available metrics based on what's returned from the API
+export const getAvailableMetrics = (healthData, allMetrics) => {
+  if (!healthData) return allMetrics;
+  
+  return allMetrics.filter(metric => 
+    healthData[metric.id] && 
+    healthData[metric.id].values && 
+    healthData[metric.id].values.length > 0
+  );
 };
