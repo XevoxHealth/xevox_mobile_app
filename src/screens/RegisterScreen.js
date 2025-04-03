@@ -73,6 +73,30 @@ const RegisterScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.formContainer}>
+            <Text style={styles.label}>Name</Text>
+            <View style={styles.inputContainer}>
+              <Icon name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your name"
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
+            
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputContainer}>
+              <Icon name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+            
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputContainer}>
               <Icon name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
@@ -227,28 +251,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default RegisterScreen;Name</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your name"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
-            
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-            
-            <Text style={styles.label}>
+export default RegisterScreen;
