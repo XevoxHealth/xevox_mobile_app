@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base URL from environment or default
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000';
@@ -16,10 +17,16 @@ const axiosInstance = axios.create({
 class ApiService {
   // Auth token management
   setAuthToken(token) {
+    if (!token) {
+      console.warn('Attempted to set empty auth token');
+      return;
+    }
+    console.log('Setting auth token');
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
   clearAuthToken() {
+    console.log('Clearing auth token');
     delete axiosInstance.defaults.headers.common['Authorization'];
   }
 
@@ -41,10 +48,20 @@ class ApiService {
 
   async login(email, password) {
     try {
+      console.log('Attempting login for:', email);
       const response = await axiosInstance.post('/api/login', {
         email,
         password,
       });
+      
+      // If login successful and token received, set it immediately
+      if (response.data && response.data.token) {
+        console.log('Login successful, setting token');
+        this.setAuthToken(response.data.token);
+      } else {
+        console.warn('Login response missing token:', response.data);
+      }
+      
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -55,6 +72,7 @@ class ApiService {
   async logout() {
     try {
       const response = await axiosInstance.post('/api/logout');
+      this.clearAuthToken();
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -133,14 +151,42 @@ class ApiService {
     }
   }
 
-  // Device connection endpoints
+  // Device connection endpoints - FIXED ENDPOINT
   async connectDevice(provider = 'default') {
     try {
-      const response = await axiosInstance.post('/connect-device', { provider });
+      // Ensure we have a token set
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        this.setAuthToken(token);
+      }
+      
+      console.log('Connecting device...');
+      console.log('Auth header:', axiosInstance.defaults.headers.common['Authorization'] ? 'Present' : 'Missing');
+      
+      const response = await axiosInstance.post('/api/connect-device', { provider });
+      console.log('Connect device response:', response.data);
       return response.data;
     } catch (error) {
+      console.error('Error connecting device:', error);
+      // Log more details if available
+      if (error.response) {
+        console.error('Error response:', error.response.status, error.response.data);
+      }
       this._handleError(error);
       throw error;
+    }
+  }
+
+  // Add a method to verify the token is valid
+  async verifyToken() {
+    try {
+      console.log('Verifying auth token...');
+      const response = await axiosInstance.get('/api/user-info');
+      console.log('Token is valid');
+      return { valid: true, user: response.data };
+    } catch (error) {
+      console.error('Token verification failed:', error.response?.status);
+      return { valid: false, error };
     }
   }
 
@@ -148,7 +194,7 @@ class ApiService {
   _handleError(error) {
     if (error.response) {
       // Server responded with a status code outside the 2xx range
-      console.error('API Error Response:', error.response.data);
+      console.error('API Error Response:', error.response.status, error.response.data);
       
       // Handle authentication errors
       if (error.response.status === 401) {

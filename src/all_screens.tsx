@@ -310,15 +310,50 @@ export const HomeScreen = () => {
   
     const handleConnectDevice = async () => {
       try {
+        // First verify authentication is working
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          Alert.alert('Authentication Error', 'You need to log in to connect your device.');
+          return;
+        }
+        
+        // Ensure token is set in API service
+        api.setAuthToken(token);
+        
+        console.log("Attempting to connect device...");
+        console.log("Auth header:", api.axiosInstance?.defaults?.headers?.common['Authorization'] ? 'Present' : 'Missing');
+        
         const result = await api.connectDevice();
+        console.log("Connect device response:", result);
+        
         if (result && result.widget_url) {
+          console.log("Opening browser with URL:", result.widget_url);
           await WebBrowser.openBrowserAsync(result.widget_url);
+          
+          // Show success message
+          Alert.alert('Success', 'Connection widget opened. Please complete the connection process.');
+          
           // Refresh health data after connecting
           fetchHealthData();
+        } else {
+          console.error("No widget_url in response:", result);
+          Alert.alert('Connection Error', 'No connection URL provided. Please try again later.');
         }
       } catch (error) {
-        console.error('Error connecting device', error);
-        Alert.alert('Error', 'Failed to connect device');
+        console.error('Error connecting device:', error);
+        
+        // Provide more specific error messages
+        if (error.response && error.response.status === 401) {
+          Alert.alert('Authentication Error', 'Your session has expired. Please log out and log in again.');
+          // Consider forcing logout here if the token is invalid
+          // await signOut();
+        } else if (error.response) {
+          Alert.alert('Server Error', `Error code: ${error.response.status}. ${error.response.data?.detail || 'Please try again later.'}`);
+        } else if (error.request) {
+          Alert.alert('Network Error', 'Cannot reach the server. Please check your internet connection.');
+        } else {
+          Alert.alert('Error', `Failed to connect device: ${error.message}`);
+        }
       }
     };
   

@@ -80,7 +80,8 @@ export const AuthProvider = ({ children }) => {
           name,
         });
         
-        // Set default header for future API calls
+        // Set default header for future API calls - this is now redundant
+        // as the api.login method already sets the token, but keeping for safety
         api.setAuthToken(token);
         
         return { success: true };

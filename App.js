@@ -1,13 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar, View, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import React, { useState, useEffect } from 'react';
 
-// Import consolidated components
-import { AuthProvider, useAuth } from './src/context';
+// Import from root directory instead of src/
+import { AuthProvider, HealthProvider, useAuth } from './src/context';
 import { 
   LoginScreen, 
   RegisterScreen, 
@@ -108,8 +107,10 @@ const Navigation = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <Navigation />
+      <HealthProvider>
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <Navigation />
+      </HealthProvider>
     </AuthProvider>
   );
 };
