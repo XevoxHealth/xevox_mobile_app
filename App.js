@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar, View, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
+import React, { useState, useEffect } from 'react';
 
-// Screens
-import LoginScreen from './screens/LoginScreen';
-import RegisterScreen from './screens/RegisterScreen';
-import HomeScreen from './screens/HomeScreen';
-import ChatbotScreen from './screens/ChatbotScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import HealthDataScreen from './screens/HealthDataScreen';
-
-// Auth Context
-import { AuthProvider, useAuth } from './context/AuthContext';
+// Import consolidated components
+import { AuthProvider, useAuth } from './src/context';
+import { 
+  LoginScreen, 
+  RegisterScreen, 
+  HomeScreen, 
+  ChatbotScreen, 
+  HealthDataScreen, 
+  ProfileScreen 
+} from './src/all_screens';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -75,10 +75,24 @@ const MainTabs = () => (
 
 const Navigation = () => {
   const { authState, isLoading } = useAuth();
+  const [initialRender, setInitialRender] = useState(true);
 
-  if (isLoading) {
+  // Use effect to handle the initial render
+  useEffect(() => {
+    if (!isLoading) {
+      // Wait a moment before setting initialRender to false to ensure
+      // components have time to initialize properly
+      const timer = setTimeout(() => {
+        setInitialRender(false);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
+  if (isLoading || initialRender) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7FAFC' }}>
         <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
