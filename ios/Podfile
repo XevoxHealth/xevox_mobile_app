@@ -61,6 +61,12 @@ target 'xevoxmobileapp' do
           config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
         end
       end
+    target 'xevoxmobileapp' do
+        Add GRDFUSDK if available
+        pod 'GRDFUSDK', :path => './GRDFUSDK'
+        
+        Core Bluetooth is included by default in iOS
+      end
     end
   end
 end

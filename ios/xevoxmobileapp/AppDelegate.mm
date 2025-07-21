@@ -1,7 +1,9 @@
 #import "AppDelegate.h"
+#import "VeePooSDKManager.h"
 
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTLinkingManager.h>
+
 
 @implementation AppDelegate
 
@@ -57,6 +59,11 @@
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 {
   return [super application:application didReceiveRemoteNotification:userInfo fetchCompletionHandler:completionHandler];
+}
+
+- (void)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    // Initialize VeePoo SDK manager if needed for background operations
+    return YES;
 }
 
 @end

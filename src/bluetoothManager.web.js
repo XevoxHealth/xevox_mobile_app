@@ -1,0 +1,17 @@
+export default {
+  initialize: async () => {},
+  scanForDevices: async () => [],
+  stopScan: async () => {},
+  connectToDevice: async () => {},
+  disconnectDevice: async () => {},
+  verifyDevicePassword: async () => ({ success: true }),
+  syncPersonalInfo: async () => ({ success: true }),
+  getHealthData: async () => ({}),
+  startHealthDataMonitoring: async () => {},
+  stopHealthDataMonitoring: async () => {},
+  isConnected: () => false,
+  getConnectedDevice: () => null,
+  getDiscoveredDevices: () => [],
+  getIsScanning: () => false,
+  cleanup: () => {},
+};

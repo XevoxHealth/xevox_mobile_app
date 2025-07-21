@@ -1,217 +1,385 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Base URL from environment or default
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000';
-
-// Create axios instance
-const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// API service with all endpoints
+// Real API service that connects to your FastAPI backend
 class ApiService {
-  // Auth token management
+  constructor() {
+    this.authToken = null;
+    this.baseURL = 'http://localhost:5000'; // Your FastAPI server
+  }
+
   setAuthToken(token) {
-    if (!token) {
-      console.warn('Attempted to set empty auth token');
-      return;
-    }
-    console.log('Setting auth token');
-    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    this.authToken = token;
   }
 
-  clearAuthToken() {
-    console.log('Clearing auth token');
-    delete axiosInstance.defaults.headers.common['Authorization'];
-  }
-
-  // Auth endpoints
-  async register(name, email, password, confirmPassword) {
+  // Authentication API calls
+  async register(userData) {
     try {
-      const response = await axiosInstance.post('/api/register', {
-        name,
-        email,
-        password,
-        confirm_password: confirmPassword,
+      const response = await fetch(`${this.baseURL}/api/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: userData.name,
+          email: userData.email,
+          password: userData.password,
+          confirm_password: userData.confirmPassword,
+        }),
       });
-      return response.data;
+
+      const result = await response.json();
+      
+      return {
+        success: result.success || false,
+        message: result.message || 'Registration failed',
+        user: result.user,
+      };
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Registration error:', error);
+      return {
+        success: false,
+        message: `Registration failed: ${error.message}`,
+      };
     }
   }
 
   async login(email, password) {
     try {
-      console.log('Attempting login for:', email);
-      const response = await axiosInstance.post('/api/login', {
-        email,
-        password,
+      const response = await fetch(`${this.baseURL}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for session
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
+
+      const result = await response.json();
       
-      // If login successful and token received, set it immediately
-      if (response.data && response.data.token) {
-        console.log('Login successful, setting token');
-        this.setAuthToken(response.data.token);
+      if (result.success) {
+        return {
+          success: true,
+          token: result.token,
+          user: {
+            id: result.id,
+            name: result.name,
+            email: email,
+          },
+        };
       } else {
-        console.warn('Login response missing token:', response.data);
+        return {
+          success: false,
+          message: result.message || 'Login failed',
+        };
       }
-      
-      return response.data;
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: `Login failed: ${error.message}`,
+      };
     }
   }
 
   async logout() {
     try {
-      const response = await axiosInstance.post('/api/logout');
-      this.clearAuthToken();
-      return response.data;
+      const response = await fetch(`${this.baseURL}/api/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      return { success: response.ok };
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Logout error:', error);
+      return { success: false };
     }
   }
 
   async getUserInfo() {
     try {
-      const response = await axiosInstance.get('/api/user-info');
-      return response.data;
+      const response = await fetch(`${this.baseURL}/api/user-info`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to get user info');
+      }
     } catch (error) {
-      this._handleError(error);
+      console.error('Get user info error:', error);
       throw error;
     }
   }
 
-  // Health data endpoints
+  // Health Data API calls
   async getHealthData(timeframe = 'day') {
     try {
-      const response = await axiosInstance.get('/api/get-health-data', {
-        params: { timeframe },
+      const response = await fetch(`${this.baseURL}/api/get-health-data?timeframe=${timeframe}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
       });
-      return response.data;
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to get health data');
+      }
     } catch (error) {
-      this._handleError(error);
+      console.error('Get health data error:', error);
       throw error;
+    }
+  }
+
+  async syncHealthData(healthData) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/sync-health-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify(healthData),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to sync health data');
+      }
+    } catch (error) {
+      console.error('Sync health data error:', error);
+      throw error;
+    }
+  }
+
+  // Device Connection API calls
+  async connectSmartwatch(deviceInfo) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/connect-smartwatch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify(deviceInfo),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to connect smartwatch');
+      }
+    } catch (error) {
+      console.error('Connect smartwatch error:', error);
+      throw error;
+    }
+  }
+
+  async getConnectedDevices() {
+    try {
+      const response = await fetch(`${this.baseURL}/api/device-status`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          devices: data.connected ? [data] : []
+        };
+      } else {
+        return { devices: [] };
+      }
+    } catch (error) {
+      console.error('Get connected devices error:', error);
+      return { devices: [] };
+    }
+  }
+
+  async disconnectDevice(deviceId) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/disconnect-smartwatch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to disconnect device');
+      }
+    } catch (error) {
+      console.error('Disconnect device error:', error);
+      throw error;
+    }
+  }
+
+  // Chat API calls
+  async sendChatMessage(message) {
+    try {
+      const formData = new FormData();
+      formData.append('message', message);
+
+      const response = await fetch(`${this.baseURL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to send chat message');
+      }
+    } catch (error) {
+      console.error('Send chat message error:', error);
+      return {
+        success: false,
+        user_message: message,
+        assistant_response: "Sorry, I'm having trouble responding right now. Please try again.",
+      };
+    }
+  }
+
+  // Chronic Conditions monitoring
+  async getChronicConditions() {
+    try {
+      const response = await fetch(`${this.baseURL}/api/get-chronic-conditions`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.conditions || [];
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Get chronic conditions error:', error);
+      return [];
     }
   }
 
   async getObservations() {
     try {
-      const response = await axiosInstance.get('/api/get-observations');
-      return response.data;
+      const response = await fetch(`${this.baseURL}/api/get-observations`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          observations: data.observations || "No observations available"
+        };
+      } else {
+        return { observations: "Unable to load observations" };
+      }
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Get observations error:', error);
+      return { observations: "Unable to load observations" };
     }
   }
 
   async getRecommendations() {
     try {
-      const response = await axiosInstance.get('/api/get-recommendations');
-      return response.data;
+      const response = await fetch(`${this.baseURL}/api/get-recommendations`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          recommendations: data.recommendations || "No recommendations available"
+        };
+      } else {
+        return { recommendations: "Unable to load recommendations" };
+      }
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Get recommendations error:', error);
+      return { recommendations: "Unable to load recommendations" };
     }
   }
 
   async getHealthAdvice() {
     try {
-      const response = await axiosInstance.get('/api/get-health-advice');
-      return response.data;
-    } catch (error) {
-      this._handleError(error);
-      throw error;
-    }
-  }
-
-  // Chat endpoints
-  async sendChatMessage(message) {
-    try {
-      const formData = new FormData();
-      formData.append('message', message);
-      
-      const response = await axiosInstance.post('/api/chat', formData, {
+      const response = await fetch(`${this.baseURL}/api/get-health-advice`, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
         },
+        credentials: 'include',
       });
-      return response.data;
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.advice || 'Keep maintaining a healthy lifestyle.';
+      } else {
+        return 'Keep maintaining a healthy lifestyle.';
+      }
     } catch (error) {
-      this._handleError(error);
-      throw error;
+      console.error('Get health advice error:', error);
+      return 'Keep maintaining a healthy lifestyle.';
     }
   }
 
-  // Device connection endpoints - FIXED ENDPOINT
-  async connectDevice(provider = 'default') {
+  // Utility method to check backend connection
+  async checkConnection() {
     try {
-      // Ensure we have a token set
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        this.setAuthToken(token);
-      }
-      
-      console.log('Connecting device...');
-      console.log('Auth header:', axiosInstance.defaults.headers.common['Authorization'] ? 'Present' : 'Missing');
-      
-      const response = await axiosInstance.post('/api/connect-device', { provider });
-      console.log('Connect device response:', response.data);
-      return response.data;
+      const response = await fetch(`${this.baseURL}/health`, { 
+        method: 'GET',
+        timeout: 5000 
+      });
+      return response.ok;
     } catch (error) {
-      console.error('Error connecting device:', error);
-      // Log more details if available
-      if (error.response) {
-        console.error('Error response:', error.response.status, error.response.data);
-      }
-      this._handleError(error);
-      throw error;
-    }
-  }
-
-  // Add a method to verify the token is valid
-  async verifyToken() {
-    try {
-      console.log('Verifying auth token...');
-      const response = await axiosInstance.get('/api/user-info');
-      console.log('Token is valid');
-      return { valid: true, user: response.data };
-    } catch (error) {
-      console.error('Token verification failed:', error.response?.status);
-      return { valid: false, error };
-    }
-  }
-
-  // Error handling
-  _handleError(error) {
-    if (error.response) {
-      // Server responded with a status code outside the 2xx range
-      console.error('API Error Response:', error.response.status, error.response.data);
-      
-      // Handle authentication errors
-      if (error.response.status === 401) {
-        // You could trigger a logout here if needed
-        console.warn('Authentication failed, user should re-login');
-      }
-    } else if (error.request) {
-      // Request was made but no response received
-      console.error('API No Response:', error.request);
-    } else {
-      // Something happened in setting up the request
-      console.error('API Request Error:', error.message);
+      console.error('Backend connection failed:', error);
+      return false;
     }
   }
 }
 
-// Create a singleton instance
+// Export singleton instance
 export const api = new ApiService();
-
-export default api;

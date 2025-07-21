@@ -195,17 +195,27 @@ export const formatHealthValue = (value, metric) => {
       return `${hours}h ${minutes}m`;
     case 'caloriesBurned':
       return Math.round(value).toLocaleString();
-    case 'bloodPressure':
-      // Assuming value is an object with systolic and diastolic
-      if (typeof value === 'object' && value.systolic && value.diastolic) {
-        return `${value.systolic}/${value.diastolic}`;
-      }
-      return value.toString();
+    case 'bloodOxygen':
+      return `${Math.round(value)}%`;
+    case 'hrv':
+      return `${Math.round(value)}ms`;
     default:
       return typeof value === 'number' && !Number.isInteger(value) 
         ? value.toFixed(1) 
         : value.toString();
   }
+};
+
+export const getUnitForMetric = (metric) => {
+  const units = {
+    steps: 'steps',
+    heartRate: 'bpm',
+    sleep: 'hrs',
+    caloriesBurned: 'kcal',
+    bloodOxygen: '%',
+    hrv: 'ms'
+  };
+  return units[metric] || '';
 };
 
 // Get color based on health metric status

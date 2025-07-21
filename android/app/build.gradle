@@ -2,6 +2,11 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+implementation files('libs/gson-2.2.4.jar')
+implementation files('libs/vpbluetooth_x.x.x.jar')
+implementation files('libs/vpprotocol_x.x.x.jar')
+
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**
