@@ -1,3 +1,5 @@
+# ios/Podfile - Updated with HBand SDK
+
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
@@ -36,6 +38,12 @@ target 'xevoxmobileapp' do
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
+  # Add HBand SDK
+  pod 'HBandSDK', :path => './HBandSDK'
+  
+  # Core Bluetooth support
+  pod 'CoreBluetooth'
+
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
@@ -61,12 +69,86 @@ target 'xevoxmobileapp' do
           config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
         end
       end
-    target 'xevoxmobileapp' do
-        Add GRDFUSDK if available
-        pod 'GRDFUSDK', :path => './GRDFUSDK'
-        
-        Core Bluetooth is included by default in iOS
+    end
+    
+    # Fix for Xcode 15
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
       end
     end
   end
 end
+
+---
+
+# ios/xevoxmobileapp/HBandSDK.podspec
+# Create this file if using a local HBand SDK
+
+Pod::Spec.new do |spec|
+  spec.name         = "HBandSDK"
+  spec.version      = "1.0.0"
+  spec.summary      = "HBand SDK for iOS"
+  spec.description  = "HBand SDK for connecting to HBand smartwatches and fitness trackers"
+  spec.homepage     = "https://github.com/HBandSDK/iOS_Ble_SDK"
+  spec.license      = "MIT"
+  spec.author       = "HBand"
+  spec.platform     = :ios, "12.0"
+  spec.source       = { :path => "." }
+  spec.source_files = "**/*.{h,m,swift}"
+  spec.framework    = "CoreBluetooth"
+  spec.requires_arc = true
+end
+
+---
+
+# ios/xevoxmobileapp/Info.plist - Add Bluetooth permissions
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Existing keys... -->
+    
+    <!-- Bluetooth Usage Descriptions -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>This app needs access to Bluetooth to connect to your health devices and monitor your vital signs in real-time.</string>
+    
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>This app needs access to Bluetooth to connect to your smartwatch and fitness trackers.</string>
+    
+    <!-- Location Usage (required for Bluetooth scanning) -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>This app needs location access to scan for nearby Bluetooth devices.</string>
+    
+    <!-- Background Modes -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>bluetooth-central</string>
+        <string>bluetooth-peripheral</string>
+        <string>background-processing</string>
+    </array>
+    
+    <!-- Supported Interface Orientations -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    </array>
+    
+    <!-- App Transport Security -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+</dict>
+</plist>

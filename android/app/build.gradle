@@ -179,3 +179,97 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// android/app/build.gradle - Add these dependencies and configurations
+
+android {
+    compileSdk 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    
+    // Add this for Bluetooth permissions
+    defaultConfig {
+        applicationId "com.xevox.health"
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0.0"
+        multiDexEnabled true
+        
+        // Add these for Bluetooth
+        manifestPlaceholders = [
+            BLUETOOTH_PERMISSION: "true"
+        ]
+    }
+    
+    // Add ProGuard rules for HBand SDK
+    buildTypes {
+        release {
+            // ... existing configuration
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    // Add repository for HBand SDK
+    repositories {
+        flatDir {
+            dirs 'libs'
+        }
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+        maven { url "https://maven.google.com" }
+    }
+}
+
+dependencies {
+    // ... existing dependencies
+    
+    // HBand SDK - Add the AAR file to android/app/libs/
+    implementation(name: 'hband-sdk-release', ext: 'aar')
+    
+    // Bluetooth dependencies
+    implementation 'androidx.bluetooth:bluetooth:1.0.0-alpha02'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    
+    // Support libraries
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
+    
+    // JSON parsing
+    implementation 'com.google.code.gson:gson:2.10.1'
+}
+
+// android/settings.gradle - Make sure to include the app module
+include ':app'
+project(':app').projectDir = new File(rootDir, 'app')
+
+// android/build.gradle (Project level)
+buildscript {
+    ext {
+        buildToolsVersion = "34.0.0"
+        minSdkVersion = 21
+        compileSdkVersion = 34
+        targetSdkVersion = 34
+        kotlinVersion = "1.8.10"
+    }
+    
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.0.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://www.jitpack.io" }
+        maven { url "https://maven.google.com" }
+    }
+}

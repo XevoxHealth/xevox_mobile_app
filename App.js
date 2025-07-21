@@ -1,25 +1,21 @@
-// Minimal fix - just add ActivityIndicator to your existing imports
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StatusBar, View, ActivityIndicator } from 'react-native'; // Added ActivityIndicator here
+import { StatusBar, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Import contexts and screens
+// Import contexts
 import { AuthProvider, useAuth } from './src/context';
-import { 
-  WelcomeScreen,
-  LoginScreen, 
-  RegisterScreen, 
-  HomeScreen, 
-  ChronicMonitorsScreen, 
-  HealthAssistantScreen, 
-  ProfileScreen 
-} from './src/all_screens';
 
-// Rest of your code stays exactly the same...
+// Import screens directly
+import { WelcomeScreen, LoginScreen, RegisterScreen } from './src/authScreens';
+import HomeScreen from './src/HomeScreen';
+import ChronicMonitorsScreen from './src/ChronicMonitorScreen';
+import HealthAssistantScreen from './src/HealthAssistantScreen';
+import ProfileScreen from './src/ProfileScreen';
+
 const Icon = Ionicons;
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -72,26 +68,10 @@ const MainTabs = () => (
       headerShown: false,
     })}
   >
-    <Tab.Screen 
-      name="Home" 
-      component={HomeScreen}
-      options={{ tabBarLabel: 'Home' }}
-    />
-    <Tab.Screen 
-      name="Chronic" 
-      component={ChronicMonitorsScreen}
-      options={{ tabBarLabel: 'Monitors' }}
-    />
-    <Tab.Screen 
-      name="Assistant" 
-      component={HealthAssistantScreen}
-      options={{ tabBarLabel: 'Assistant' }}
-    />
-    <Tab.Screen 
-      name="Profile" 
-      component={ProfileScreen}
-      options={{ tabBarLabel: 'Profile' }}
-    />
+    <Tab.Screen name="Home" component={HomeScreen} />
+    <Tab.Screen name="Chronic" component={ChronicMonitorsScreen} />
+    <Tab.Screen name="Assistant" component={HealthAssistantScreen} />
+    <Tab.Screen name="Profile" component={ProfileScreen} />
   </Tab.Navigator>
 );
 

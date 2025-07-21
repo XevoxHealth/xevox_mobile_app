@@ -1,7 +1,82 @@
 {
   "expo": {
-    "name": "xevox_mobile_app",
-    "slug": "xevox_mobile_app",
-    "version": "1.0.0"
+    "name": "XEVOX Health Assistant",
+    "slug": "xevox-health",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xevox.health",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app needs access to Bluetooth to connect to your health devices and monitor your vital signs in real-time.",
+        "NSBluetoothPeripheralUsageDescription": "This app needs access to Bluetooth to connect to your smartwatch and fitness trackers.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to scan for nearby Bluetooth devices.",
+        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+      },
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.xevox.health",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_ADVERTISE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "blockedPermissions": []
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "XEVOX Health Assistant",
+      "description": "AI-powered health monitoring with smartwatch integration",
+      "backgroundColor": "#ffffff",
+      "themeColor": "#4F46E5",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "crossOrigin": "anonymous",
+      "bundler": "webpack"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-dev-launcher",
+        {
+          "launchMode": "most-recent"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
+    },
+    "scheme": "xevoxhealth"
   }
 }
