@@ -19,10 +19,16 @@
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.jni.** { *; }
 
+# Keep VeePoo SDK classes
+-keep class com.veepoo.** { *; }
+-dontwarn com.veepoo.**
+
 # Keep HBand SDK classes
 -keep class com.hband.sdk.** { *; }
 -keepattributes Signature
 -keepattributes *Annotation*
+-keep class com.hband.** { *; }
+-dontwarn com.hband.**
 
 # Keep Bluetooth related classes
 -keep class android.bluetooth.** { *; }
@@ -31,6 +37,8 @@
 # Keep native module classes
 -keep class com.xevoxmobileapp.HBandAndroidSDKModule { *; }
 -keep class com.xevoxmobileapp.HBandAndroidSDKPackage { *; }
+-keep class com.xevoxhealth.** { *; }
+-keep class com.xevoxmobileapp.** { *; }
 
 # Keep React Native bridge methods
 -keepclassmembers class * {

@@ -1,7 +1,4 @@
-// android/app/src/main/java/com/xevoxmobileapp/HBandAndroidSDKPackage.java
 package com.xevoxmobileapp;
-
-import androidx.annotation.NonNull;
 
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.NativeModule;
@@ -14,21 +11,15 @@ import java.util.List;
 
 public class HBandAndroidSDKPackage implements ReactPackage {
 
-    @NonNull
     @Override
-    public List<NativeModule> createNativeModules(@NonNull ReactApplicationContext reactContext) {
+    public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
         modules.add(new HBandAndroidSDKModule(reactContext));
         return modules;
     }
-
-    @NonNull
-    @Override
-    public List<ViewManager> createViewManagers(@NonNull ReactApplicationContext reactContext) {
-        return Collections.emptyList();
-    }
 }
-
-// Update MainApplication.kt to register the package
-// Add this to the getPackages() method in MainApplication.kt:
-// packages.add(HBandAndroidSDKPackage())

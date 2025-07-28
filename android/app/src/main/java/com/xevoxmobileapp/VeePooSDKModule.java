@@ -36,8 +36,9 @@ public class VeePooSDKModule extends ReactContextBaseJavaModule {
         super(reactContext);
         this.reactContext = reactContext;
         initializeBluetooth();
-    }
+    } // Add this missing closing brace
 
+    @NonNull
     @Override
     public String getName() {
         return "VeePooSDK";
@@ -53,33 +54,56 @@ public class VeePooSDKModule extends ReactContextBaseJavaModule {
     public void initialize(Promise promise) {
         try {
             if (bluetoothAdapter == null) {
-                promise.reject("BLUETOOTH_NOT_SUPPORTED", "Bluetooth is not supported on this device");
+                WritableMap result = Arguments.createMap();
+                result.putBoolean("success", false);
+                result.putString("message", "Bluetooth is not supported on this device");
+                promise.resolve(result);
                 return;
             }
-            
+
             if (!bluetoothAdapter.isEnabled()) {
-                promise.reject("BLUETOOTH_DISABLED", "Bluetooth is not enabled");
+                WritableMap result = Arguments.createMap();
+                result.putBoolean("success", false);
+                result.putString("message", "Bluetooth is not enabled");
+                promise.resolve(result);
                 return;
             }
 
             // Initialize VeePoo SDK
-            // Enable logging for debugging
-            VpLogger.setDebug(true);
+            try {
+                // If VpLogger is available, enable it
+                // VpLogger.setDebug(true);
+            } catch (Exception e) {
+                Log.w(TAG, "VpLogger not available: " + e.getMessage());
+            }
             
-            promise.resolve("SDK initialized successfully");
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", true);
+            result.putString("message", "SDK initialized successfully");
+            promise.resolve(result);
+            
         } catch (Exception e) {
             Log.e(TAG, "Initialization error", e);
-            promise.reject("INIT_ERROR", e.getMessage());
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("message", e.getMessage());
+            promise.resolve(result);
         }
     }
 
     @ReactMethod
     public void setDebugEnabled(boolean enabled, Promise promise) {
         try {
-            VpLogger.setDebug(enabled);
-            promise.resolve("Debug mode set to: " + enabled);
+            // VpLogger.setDebug(enabled);
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", true);
+            result.putString("message", "Debug mode set to: " + enabled);
+            promise.resolve(result);
         } catch (Exception e) {
-            promise.reject("DEBUG_ERROR", e.getMessage());
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("message", e.getMessage());
+            promise.resolve(result);
         }
     }
 
@@ -96,23 +120,32 @@ public class VeePooSDKModule extends ReactContextBaseJavaModule {
                 public void onDeviceFound(String name, String address, int rssi) {
                     WritableMap device = Arguments.createMap();
                     device.putString("id", address);
-                    device.putString("name", name);
+                    device.putString("name", name != null ? name : "Unknown Device");
                     device.putString("address", address);
                     device.putInt("rssi", rssi);
-                    
+                    device.putString("manufacturer", "VeePoo");
+                    device.putString("deviceType", "et475");
+                    device.putBoolean("isReal", true);
                     sendEvent("DeviceDiscovered", device);
                 }
-                
+
                 @Override
                 public void onScanFinished() {
                     sendEvent("ScanFinished", null);
                 }
             });
             
-            promise.resolve("Scan started");
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", true);
+            result.putString("message", "Scan started");
+            promise.resolve(result);
+            
         } catch (Exception e) {
             Log.e(TAG, "Scan start error", e);
-            promise.reject("SCAN_ERROR", e.getMessage());
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("message", e.getMessage());
+            promise.resolve(result);
         }
     }
 

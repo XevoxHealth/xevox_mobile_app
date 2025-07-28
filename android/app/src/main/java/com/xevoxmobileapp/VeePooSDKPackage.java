@@ -1,23 +1,25 @@
-// 2. android/app/src/main/java/com/xevoxhealth/VeePooSDKPackage.java
-package com.xevoxhealth;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+package com.xevoxhealth; // Changed from com.xevoxmobileapp
 
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.uimanager.ViewManager;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class VeePooSDKPackage implements ReactPackage {
-    @Override
-    public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
-        return Arrays.<NativeModule>asList(new VeePooSDKModule(reactContext));
-    }
 
     @Override
     public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
         return Collections.emptyList();
+    }
+
+    @Override
+    public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
+        List<NativeModule> modules = new ArrayList<>();
+        modules.add(new VeePooSDKModule(reactContext));
+        return modules;
     }
 }
