@@ -1,38 +1,64 @@
-// Real context.js that connects to your FastAPI backend
+// Updated context.js - Fix user data storage structure
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { api } from './api_service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// Simple storage for web compatibility
+// Storage utility for cross-platform compatibility
 const storage = {
   getItem: async (key) => {
     try {
-      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      if (Platform.OS === 'web') {
+        return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      } else {
+        // React Native
+        return await AsyncStorage.getItem(key);
+      }
     } catch (e) {
+      console.error('Storage getItem error:', e);
       return null;
     }
   },
+  
   setItem: async (key, value) => {
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, value);
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, value);
+        }
+        return true;
+      } else {
+        // React Native
+        await AsyncStorage.setItem(key, value);
+        return true;
       }
-      return true;
     } catch (e) {
+      console.error('Storage setItem error:', e);
       return false;
     }
   },
+  
   removeItem: async (key) => {
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(key);
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(key);
+        }
+        return true;
+      } else {
+        // React Native
+        await AsyncStorage.removeItem(key);
+        return true;
       }
-      return true;
     } catch (e) {
+      console.error('Storage removeItem error:', e);
       return false;
     }
   }
 };
+
+export { storage };
 
 // Auth Context
 const AuthContext = createContext();
@@ -97,15 +123,24 @@ export const AuthProvider = ({ children }) => {
       const userToken = await storage.getItem('userToken');
       const userData = await storage.getItem('userData');
       
+      console.log('🔄 Restoring auth state...');
+      console.log('Token exists:', !!userToken);
+      console.log('User data exists:', !!userData);
+      
       if (userToken && userData) {
         const user = JSON.parse(userData);
+        console.log('✅ Restored user:', { id: user.id, email: user.email });
+        
+        // Set the token in API service
         api.setAuthToken(userToken);
+        
         dispatch({
           type: 'RESTORE_TOKEN',
           token: userToken,
           user: user,
         });
       } else {
+        console.log('❌ No stored auth data found');
         dispatch({
           type: 'RESTORE_TOKEN',
           token: null,
@@ -113,7 +148,7 @@ export const AuthProvider = ({ children }) => {
         });
       }
     } catch (error) {
-      console.error('Error restoring token:', error);
+      console.error('❌ Error restoring token:', error);
       dispatch({
         type: 'RESTORE_TOKEN',
         token: null,
@@ -126,38 +161,49 @@ export const AuthProvider = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', isLoading: true });
       
-      // Check backend connection first
-      const isConnected = await api.checkConnection();
-      if (!isConnected) {
-        dispatch({ type: 'SET_LOADING', isLoading: false });
-        return { 
-          success: false, 
-          message: 'Unable to connect to the server. Make sure your backend is running on http://localhost:5000' 
-        };
-      }
+      console.log('🔐 Attempting login for:', email);
       
       const result = await api.login(email, password);
+      console.log('🔐 Login result:', { success: result.success, hasToken: !!result.token });
       
-      if (result.success) {
-        await storage.setItem('userToken', result.token);
-        await storage.setItem('userData', JSON.stringify(result.user));
+      if (result.success && result.token) {
+        const user = {
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email
+        };
         
+        console.log('✅ Storing auth data:', { userId: user.id, email: user.email });
+        
+        // Store both token and user data
+        await storage.setItem('userToken', result.token);
+        await storage.setItem('userData', JSON.stringify(user));
+        
+        // Verify storage worked
+        const storedToken = await storage.getItem('userToken');
+        const storedUser = await storage.getItem('userData');
+        console.log('🔍 Verification - Token stored:', !!storedToken);
+        console.log('🔍 Verification - User stored:', !!storedUser);
+        
+        // Set token in API service
         api.setAuthToken(result.token);
         
         dispatch({
           type: 'SIGN_IN',
           token: result.token,
-          user: result.user,
+          user: user,
         });
         
+        console.log('✅ Sign in completed successfully');
         return { success: true };
       } else {
+        console.log('❌ Login failed:', result.message);
         dispatch({ type: 'SET_LOADING', isLoading: false });
         return { success: false, message: result.message };
       }
     } catch (error) {
+      console.error('❌ Sign in error:', error);
       dispatch({ type: 'SET_LOADING', isLoading: false });
-      console.error('Sign in error:', error);
       return { 
         success: false, 
         message: error.message || 'Login failed. Please check your connection and try again.' 
@@ -169,32 +215,28 @@ export const AuthProvider = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', isLoading: true });
       
-      // Check backend connection first
-      const isConnected = await api.checkConnection();
-      if (!isConnected) {
-        dispatch({ type: 'SET_LOADING', isLoading: false });
-        return { 
-          success: false, 
-          message: 'Unable to connect to the server. Make sure your backend is running on http://localhost:5000' 
-        };
-      }
-      
       const result = await api.register(userData);
       
       if (result.success) {
         // Auto-login after successful registration
         const loginResult = await api.login(userData.email, userData.password);
         
-        if (loginResult.success) {
+        if (loginResult.success && loginResult.token) {
+          const user = {
+            id: loginResult.user.id,
+            name: loginResult.user.name,
+            email: loginResult.user.email
+          };
+          
           await storage.setItem('userToken', loginResult.token);
-          await storage.setItem('userData', JSON.stringify(loginResult.user));
+          await storage.setItem('userData', JSON.stringify(user));
           
           api.setAuthToken(loginResult.token);
           
           dispatch({
             type: 'SIGN_IN',
             token: loginResult.token,
-            user: loginResult.user,
+            user: user,
           });
           
           return { success: true };
@@ -235,6 +277,16 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (userData) => {
     dispatch({ type: 'UPDATE_USER', user: userData });
   };
+
+  // DEBUG: Log current auth state
+  useEffect(() => {
+    console.log('🔍 AUTH STATE UPDATED:');
+    console.log('  Authenticated:', authState.authenticated);
+    console.log('  User ID:', authState.user?.id);
+    console.log('  User Email:', authState.user?.email);
+    console.log('  Token exists:', !!authState.token);
+    console.log('  Loading:', authState.isLoading);
+  }, [authState]);
 
   const value = {
     authState,
@@ -283,9 +335,9 @@ const healthReducer = (state, action) => {
       return {
         ...state,
         healthData: action.data,
-        lastSync: new Date().toISOString(),
         isLoading: false,
         error: null,
+        lastSync: new Date().toISOString(),
       };
     case 'SET_ERROR':
       return {
@@ -299,9 +351,7 @@ const healthReducer = (state, action) => {
         connectedDevice: action.device,
       };
     case 'CLEAR_HEALTH_DATA':
-      return {
-        ...healthInitialState,
-      };
+      return healthInitialState;
     default:
       return state;
   }
@@ -313,21 +363,12 @@ export const HealthProvider = ({ children }) => {
   const fetchHealthData = async (timeframe = 'day') => {
     try {
       dispatch({ type: 'SET_LOADING', isLoading: true });
-      
-      const healthData = await api.getHealthData(timeframe);
-      
-      dispatch({
-        type: 'SET_HEALTH_DATA',
-        data: healthData,
-      });
-      
-      return healthData;
+      const data = await api.getHealthData(timeframe);
+      dispatch({ type: 'SET_HEALTH_DATA', data });
+      return data;
     } catch (error) {
       console.error('Error fetching health data:', error);
-      dispatch({
-        type: 'SET_ERROR',
-        error: 'Failed to fetch health data',
-      });
+      dispatch({ type: 'SET_ERROR', error: error.message });
       throw error;
     }
   };
@@ -335,51 +376,24 @@ export const HealthProvider = ({ children }) => {
   const connectDevice = async (deviceInfo) => {
     try {
       dispatch({ type: 'SET_LOADING', isLoading: true });
-      
       const result = await api.connectSmartwatch(deviceInfo);
-      
       if (result.success) {
-        dispatch({
-          type: 'SET_CONNECTED_DEVICE',
-          device: result.device_info,
-        });
+        dispatch({ type: 'SET_CONNECTED_DEVICE', device: deviceInfo });
       }
-      
       return result;
     } catch (error) {
-      dispatch({
-        type: 'SET_ERROR',
-        error: error.message || 'Failed to connect device',
-      });
+      console.error('Error connecting device:', error);
+      dispatch({ type: 'SET_ERROR', error: error.message });
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', isLoading: false });
     }
   };
 
-  const disconnectDevice = async () => {
-    try {
-      await api.disconnectDevice();
-      
-      dispatch({
-        type: 'SET_CONNECTED_DEVICE',
-        device: null,
-      });
-    } catch (error) {
-      console.error('Disconnect error:', error);
-    }
-  };
-
-  const clearError = () => {
-    dispatch({ type: 'SET_ERROR', error: null });
-  };
-
   const value = {
     healthState,
     fetchHealthData,
     connectDevice,
-    disconnectDevice,
-    clearError,
   };
 
   return (

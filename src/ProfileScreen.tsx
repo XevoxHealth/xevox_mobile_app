@@ -8,9 +8,37 @@ import {
   SafeAreaView,
   Platform
 } from 'react-native';
-import { LinearGradient } from './authScreens';
-import { Icon } from './authScreens';
 import { useAuth } from './context';
+
+// Define LinearGradient and Icon components locally
+const LinearGradient = ({ colors, children, style, ...props }) => (
+  <View style={[style, { 
+    backgroundColor: colors?.[0] || '#667eea',
+    ...(Platform.OS === 'web' ? {
+      background: `linear-gradient(135deg, ${colors?.[0] || '#667eea'}, ${colors?.[1] || '#764ba2'})`
+    } : {})
+  }]} {...props}>
+    {children}
+  </View>
+);
+
+const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
+  <View style={[{
+    width: size,
+    height: size,
+    backgroundColor: color,
+    borderRadius: size/4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  }, style]} {...props}>
+    <View style={{
+      width: size * 0.5,
+      height: size * 0.5,
+      backgroundColor: '#fff',
+      borderRadius: 2
+    }} />
+  </View>
+);
 
 export const ProfileScreen = () => {
   const { authState, signOut } = useAuth();

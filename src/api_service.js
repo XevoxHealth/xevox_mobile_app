@@ -1,15 +1,74 @@
-// Real API service that connects to your FastAPI backend
+// Updated api_service.js with getHealthData method
 class ApiService {
   constructor() {
     this.authToken = null;
-    this.baseURL = 'http://localhost:5000'; // Your FastAPI server
+    this.baseURL = 'http://192.168.1.107:5000'; // Your computer's IP
   }
 
   setAuthToken(token) {
     this.authToken = token;
+    console.log('🔑 Auth token set:', token ? 'Token exists' : 'Token cleared');
   }
 
-  // Authentication API calls
+  // Get auth headers with proper token
+  getAuthHeaders() {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+      console.log('🔑 Including auth header with token');
+    } else {
+      console.warn('⚠️ No auth token available');
+    }
+    
+    return headers;
+  }
+
+  async login(email, password) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        this.setAuthToken(result.token);
+        
+        return {
+          success: true,
+          token: result.token,
+          user: {
+            id: result.id,
+            name: result.name,
+            email: email,
+          },
+        };
+      } else {
+        return {
+          success: false,
+          message: result.message || 'Login failed',
+        };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: `Login failed: ${error.message}`,
+      };
+    }
+  }
+
   async register(userData) {
     try {
       const response = await fetch(`${this.baseURL}/api/register`, {
@@ -41,55 +100,11 @@ class ApiService {
     }
   }
 
-  async login(email, password) {
-    try {
-      const response = await fetch(`${this.baseURL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies for session
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        return {
-          success: true,
-          token: result.token,
-          user: {
-            id: result.id,
-            name: result.name,
-            email: email,
-          },
-        };
-      } else {
-        return {
-          success: false,
-          message: result.message || 'Login failed',
-        };
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        message: `Login failed: ${error.message}`,
-      };
-    }
-  }
-
   async logout() {
     try {
       const response = await fetch(`${this.baseURL}/api/logout`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -104,10 +119,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/user-info`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -122,48 +134,81 @@ class ApiService {
     }
   }
 
-  // Health Data API calls
+  // NEW: Get health data from backend
   async getHealthData(timeframe = 'day') {
     try {
+      console.log('📊 Fetching health data from API, timeframe:', timeframe);
+      
+      if (!this.authToken) {
+        throw new Error('No authentication token available');
+      }
+
       const response = await fetch(`${this.baseURL}/api/get-health-data?timeframe=${timeframe}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
+      console.log('📊 Health data response status:', response.status);
+
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        console.log('📊 Health data received:', Object.keys(data));
+        return data;
       } else {
-        throw new Error('Failed to get health data');
+        const errorText = await response.text();
+        console.error('📊 Health data fetch failed:', response.status, errorText);
+        throw new Error(`Failed to get health data: ${response.status}`);
       }
     } catch (error) {
-      console.error('Get health data error:', error);
+      console.error('📊 Get health data error:', error);
       throw error;
     }
   }
 
   async syncHealthData(healthData) {
     try {
+      console.log('🔄 Syncing health data with auth token:', !!this.authToken);
+      console.log('📊 Health data payload:', JSON.stringify(healthData, null, 2));
+      
+      if (!this.authToken) {
+        throw new Error('No authentication token available. Please login again.');
+      }
+      
       const response = await fetch(`${this.baseURL}/api/sync-health-data`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify(healthData),
       });
 
+      console.log('📡 Sync response status:', response.status);
+      
       if (response.ok) {
-        return await response.json();
+        const result = await response.json();
+        console.log('✅ Health data synced successfully:', result);
+        return result;
       } else {
-        throw new Error('Failed to sync health data');
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText };
+        }
+        
+        console.error('❌ Sync failed:', response.status, errorData);
+        
+        if (response.status === 401) {
+          throw new Error('Authentication failed. Please login again.');
+        } else if (response.status === 403) {
+          throw new Error('User ID mismatch. Please logout and login again.');
+        } else {
+          throw new Error(errorData.detail || `HTTP ${response.status}: Failed to sync health data`);
+        }
       }
     } catch (error) {
-      console.error('Sync health data error:', error);
+      console.error('❌ Sync health data error:', error);
       throw error;
     }
   }
@@ -173,10 +218,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/connect-smartwatch`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify(deviceInfo),
       });
@@ -196,10 +238,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/device-status`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -221,10 +260,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/disconnect-smartwatch`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -274,10 +310,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/get-chronic-conditions`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -297,10 +330,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/get-observations`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -322,10 +352,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/get-recommendations`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 
@@ -347,10 +374,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/api/get-health-advice`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}),
-        },
+        headers: this.getAuthHeaders(),
         credentials: 'include',
       });
 

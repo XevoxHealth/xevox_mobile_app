@@ -22,7 +22,7 @@ A React Native mobile application that integrates with the FastAPI health assist
 ```
 Xevox App/
 ├── src/
-│   ├── all_screens.tsx      # All screens consolidated
+│   ├── Home screens.tsx etc     # All screens consolidated
 │   ├── api_service.js       # API integration with backend
 │   ├── context.js           # Auth context and other contexts
 │   ├── components.js        # Reusable UI components

@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  RefreshControl
+  RefreshControl,
+  Dimensions
 } from 'react-native';
 import { useAuth } from './context';
 import { api } from './api_service';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 // Simple fallback icons
 const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
@@ -44,43 +47,149 @@ const LinearGradient = ({ colors, children, style, ...props }) => (
   </View>
 );
 
+// Mini chart component for showing trends
+const MiniChart = ({ data, color, height = 40 }) => {
+  if (!data || data.length === 0) {
+    return (
+      <View style={[styles.chartPlaceholder, { height }]}>
+        <Text style={styles.noChartText}>No data</Text>
+      </View>
+    );
+  }
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+
+  return (
+    <View style={[styles.chartContainer, { height }]}>
+      {data.map((value, index) => {
+        const barHeight = Math.max(4, ((value - min) / range) * (height - 8));
+        return (
+          <View
+            key={index}
+            style={[
+              styles.chartBar,
+              {
+                height: barHeight,
+                backgroundColor: color,
+                width: Math.max(80 / data.length - 2, 3),
+              }
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+};
+
+// Risk Level Indicator
+const RiskIndicator = ({ level }) => {
+  const getRiskColor = () => {
+    switch (level.toLowerCase()) {
+      case 'low': return '#10B981';
+      case 'moderate': return '#F59E0B';
+      case 'high': return '#EF4444';
+      case 'very high': return '#DC2626';
+      default: return '#6B7280';
+    }
+  };
+
+  return (
+    <View style={[styles.riskBadge, { backgroundColor: getRiskColor() }]}>
+      <Text style={styles.riskText}>{level.toUpperCase()}</Text>
+    </View>
+  );
+};
+
+// Chronic Condition Card Component
+const ChronicConditionCard = ({ condition, onPress }) => {
+  const { name, description, riskLevel, keyMetrics, recommendations, color, icon } = condition;
+
+  return (
+    <TouchableOpacity 
+      style={styles.conditionCard}
+      onPress={() => onPress(condition)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardHeader}>
+        <View style={[styles.cardIconContainer, { backgroundColor: color + '20' }]}>
+          <Icon name={icon} size={24} color={color} />
+        </View>
+        <RiskIndicator level={riskLevel} />
+      </View>
+
+      <Text style={styles.conditionName}>{name}</Text>
+      <Text style={styles.conditionDescription}>{description}</Text>
+
+      {/* Key Metrics */}
+      <View style={styles.metricsSection}>
+        <Text style={styles.metricsTitle}>Key Indicators</Text>
+        <View style={styles.metricsGrid}>
+          {keyMetrics.map((metric, index) => (
+            <View key={index} style={styles.metricItem}>
+              <Text style={styles.metricLabel}>{metric.name}</Text>
+              <Text style={[styles.metricValue, { color }]}>
+                {metric.value} {metric.unit}
+              </Text>
+              <Text style={styles.metricStatus}>{metric.status}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Mini Chart */}
+      {keyMetrics[0]?.history && (
+        <View style={styles.chartSection}>
+          <Text style={styles.chartTitle}>7-Day Trend</Text>
+          <MiniChart 
+            data={keyMetrics[0].history} 
+            color={color}
+            height={40}
+          />
+        </View>
+      )}
+
+      {/* Quick Recommendations */}
+      <View style={styles.recommendationsPreview}>
+        <Text style={styles.recommendationsTitle}>Recommendations</Text>
+        <Text style={styles.recommendationText}>
+          {recommendations[0]}
+        </Text>
+        {recommendations.length > 1 && (
+          <Text style={styles.moreRecommendations}>
+            +{recommendations.length - 1} more recommendations
+          </Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 export const ChronicMonitorsScreen = () => {
   const { authState } = useAuth();
-  const [chronicConditions, setChronicConditions] = useState([]);
-  const [healthData, setHealthData] = useState(null);
+  const [healthData, setHealthData] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasConnectedDevice, setHasConnectedDevice] = useState(false);
 
   useEffect(() => {
-    loadChronicConditions();
+    loadHealthData();
     checkDeviceStatus();
   }, []);
 
-  const loadChronicConditions = async () => {
+  const loadHealthData = async () => {
     try {
       setIsLoading(true);
-      console.log('Loading chronic conditions...');
+      console.log('Loading health data for chronic conditions analysis...');
       
-      // Get chronic conditions from backend
-      const conditions = await api.getChronicConditions();
-      console.log('Chronic conditions received:', conditions);
-      
-      // Get health data for context
-      const healthMetrics = await api.getHealthData('week');
-      setHealthData(healthMetrics);
-      
-      if (conditions && conditions.length > 0) {
-        setChronicConditions(conditions);
-      } else {
-        // If no specific conditions, analyze health data for potential risks
-        const potentialConditions = analyzePotentialConditions(healthMetrics);
-        setChronicConditions(potentialConditions);
-      }
+      // Get health data from backend
+      const data = await api.getHealthData('week');
+      setHealthData(data);
       
     } catch (error) {
-      console.error('Error loading chronic conditions:', error);
-      Alert.alert('Error', 'Failed to load chronic condition data');
+      console.error('Error loading health data:', error);
+      Alert.alert('Error', 'Failed to load health data');
     } finally {
       setIsLoading(false);
     }
@@ -95,235 +204,310 @@ export const ChronicMonitorsScreen = () => {
     }
   };
 
-  const analyzePotentialConditions = (healthMetrics) => {
-    if (!healthMetrics || typeof healthMetrics !== 'object') {
-      return [];
-    }
-
-    const conditions = [];
-
-    // Check for cardiovascular risks
-    const heartRate = healthMetrics.heartRate;
-    const bloodPressure = healthMetrics.bloodPressure;
-    
-    if (heartRate && (heartRate.average > 100 || heartRate.current_value > 100)) {
-      conditions.push({
-        condition: 'Elevated Heart Rate',
-        severity: 'moderate',
-        description: 'Your heart rate has been consistently elevated above normal ranges',
-        recommendations: [
-          'Monitor stress levels and practice relaxation techniques',
-          'Ensure adequate hydration',
-          'Consider reducing caffeine intake',
-          'Consult with a healthcare provider if persistent'
-        ],
-        metrics: {
-          current: Math.round(heartRate.current_value || heartRate.average),
-          status: heartRate.status,
-          trend: heartRate.average > 90 ? 'increasing' : 'stable'
-        }
-      });
-    }
-
-    // Check for sleep issues
-    const sleep = healthMetrics.sleep;
-    if (sleep && (sleep.average < 6 || sleep.current_value < 6)) {
-      conditions.push({
-        condition: 'Sleep Deficiency',
-        severity: sleep.average < 5 ? 'high' : 'moderate',
-        description: 'You are consistently getting less sleep than recommended',
-        recommendations: [
-          'Maintain a consistent sleep schedule',
-          'Create a relaxing bedtime routine',
-          'Limit screen time 1 hour before bed',
-          'Keep your bedroom cool and dark',
-          'Consider a sleep study if issues persist'
-        ],
-        metrics: {
-          current: sleep.current_value || sleep.average,
-          status: sleep.status,
-          trend: 'concerning'
-        }
-      });
-    }
-
-    // Check for low activity levels
-    const steps = healthMetrics.steps;
-    if (steps && (steps.average < 5000 || steps.current_value < 5000)) {
-      conditions.push({
-        condition: 'Low Physical Activity',
-        severity: 'moderate',
-        description: 'Your daily step count is below recommended levels',
-        recommendations: [
-          'Aim for at least 10,000 steps per day',
-          'Take short walks throughout the day',
-          'Use stairs instead of elevators',
-          'Park further away or get off transit one stop early',
-          'Join a walking group or find an exercise buddy'
-        ],
-        metrics: {
-          current: Math.round(steps.current_value || steps.average),
-          status: steps.status,
-          trend: 'needs_improvement'
-        }
-      });
-    }
-
-    // Check for high stress indicators
-    const stress = healthMetrics.stress;
-    if (stress && (stress.average > 6 || stress.current_value > 6)) {
-      conditions.push({
-        condition: 'Elevated Stress Levels',
-        severity: stress.average > 8 ? 'high' : 'moderate',
-        description: 'Your stress levels have been consistently high',
-        recommendations: [
-          'Practice deep breathing exercises',
-          'Try meditation or mindfulness apps',
-          'Regular physical exercise',
-          'Ensure adequate sleep',
-          'Consider talking to a mental health professional'
-        ],
-        metrics: {
-          current: Math.round(stress.current_value || stress.average),
-          status: stress.status,
-          trend: 'elevated'
-        }
-      });
-    }
-
-    // If no conditions detected, return a positive message
-    if (conditions.length === 0) {
-      conditions.push({
-        condition: 'Good Health Status',
-        severity: 'good',
-        description: 'Based on your current health metrics, you\'re maintaining good health!',
-        recommendations: [
-          'Continue your current healthy habits',
-          'Stay consistent with regular exercise',
-          'Maintain a balanced diet',
-          'Keep monitoring your health metrics',
-          'Schedule regular health checkups'
-        ],
-        metrics: {
-          overall_score: 85,
-          status: 'good',
-          trend: 'stable'
-        }
-      });
-    }
-
-    return conditions;
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadChronicConditions();
+    await loadHealthData();
     await checkDeviceStatus();
     setRefreshing(false);
   };
 
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'high':
-        return '#EF4444';
-      case 'moderate':
-        return '#F59E0B';
-      case 'low':
-        return '#10B981';
-      case 'good':
-        return '#10B981';
-      default:
-        return '#6B7280';
-    }
+  // Analyze health data for chronic conditions
+  const analyzeChronicConditions = () => {
+    const conditions = [];
+
+    // 1. CARDIOVASCULAR DISEASE
+    const heartRate = healthData.heartRate?.average || 75;
+    const bloodPressure = {
+      systolic: healthData.bloodPressure?.current_systolic || 120,
+      diastolic: healthData.bloodPressure?.current_diastolic || 80
+    };
+    const steps = healthData.steps?.average || 5000;
+
+    const cvdRisk = calculateCVDRisk(heartRate, bloodPressure, steps);
+    conditions.push({
+      name: 'Cardiovascular Disease',
+      description: 'Heart and blood vessel health monitoring',
+      riskLevel: cvdRisk.level,
+      color: '#EF4444',
+      icon: 'heart',
+      keyMetrics: [
+        {
+          name: 'Heart Rate',
+          value: Math.round(heartRate),
+          unit: 'bpm',
+          status: heartRate > 100 ? 'Elevated' : heartRate < 60 ? 'Low' : 'Normal',
+          history: healthData.heartRate?.values?.slice(-7) || []
+        },
+        {
+          name: 'Blood Pressure',
+          value: `${Math.round(bloodPressure.systolic)}/${Math.round(bloodPressure.diastolic)}`,
+          unit: 'mmHg',
+          status: bloodPressure.systolic > 140 ? 'High' : 'Normal',
+          history: []
+        },
+        {
+          name: 'Activity Level',
+          value: Math.round(steps),
+          unit: 'steps/day',
+          status: steps < 5000 ? 'Low' : steps > 10000 ? 'Excellent' : 'Good',
+          history: healthData.steps?.values?.slice(-7) || []
+        }
+      ],
+      recommendations: cvdRisk.recommendations
+    });
+
+    // 2. DIABETES
+    const glucose = healthData.bloodGlucose?.average || 95;
+    const diabetesRisk = calculateDiabetesRisk(glucose, steps);
+    conditions.push({
+      name: 'Diabetes',
+      description: 'Blood sugar and metabolic health',
+      riskLevel: diabetesRisk.level,
+      color: '#8B5CF6',
+      icon: 'water',
+      keyMetrics: [
+        {
+          name: 'Blood Glucose',
+          value: Math.round(glucose),
+          unit: 'mg/dL',
+          status: glucose > 125 ? 'High' : glucose < 70 ? 'Low' : 'Normal',
+          history: healthData.bloodGlucose?.values?.slice(-7) || []
+        },
+        {
+          name: 'Physical Activity',
+          value: Math.round(steps),
+          unit: 'steps/day',
+          status: steps < 5000 ? 'Insufficient' : 'Adequate',
+          history: healthData.steps?.values?.slice(-7) || []
+        }
+      ],
+      recommendations: diabetesRisk.recommendations
+    });
+
+    // 3. HYPERTENSION
+    const hypertensionRisk = calculateHypertensionRisk(bloodPressure, healthData.stress?.average || 3);
+    conditions.push({
+      name: 'Hypertension',
+      description: 'High blood pressure monitoring',
+      riskLevel: hypertensionRisk.level,
+      color: '#DC2626',
+      icon: 'medical',
+      keyMetrics: [
+        {
+          name: 'Systolic BP',
+          value: Math.round(bloodPressure.systolic),
+          unit: 'mmHg',
+          status: bloodPressure.systolic > 140 ? 'High' : bloodPressure.systolic > 120 ? 'Elevated' : 'Normal',
+          history: []
+        },
+        {
+          name: 'Diastolic BP',
+          value: Math.round(bloodPressure.diastolic),
+          unit: 'mmHg',
+          status: bloodPressure.diastolic > 90 ? 'High' : bloodPressure.diastolic > 80 ? 'Elevated' : 'Normal',
+          history: []
+        },
+        {
+          name: 'Stress Level',
+          value: Math.round(healthData.stress?.average || 3),
+          unit: '/10',
+          status: (healthData.stress?.average || 3) > 6 ? 'High' : 'Normal',
+          history: healthData.stress?.values?.slice(-7) || []
+        }
+      ],
+      recommendations: hypertensionRisk.recommendations
+    });
+
+    // 4. CHRONIC RESPIRATORY DISEASES
+    const oxygenSat = healthData.oxygenSaturation?.average || 98;
+    const respiratoryRisk = calculateRespiratoryRisk(oxygenSat, heartRate);
+    conditions.push({
+      name: 'Chronic Respiratory Diseases',
+      description: 'Lung function and breathing health',
+      riskLevel: respiratoryRisk.level,
+      color: '#22C55E',
+      icon: 'leaf',
+      keyMetrics: [
+        {
+          name: 'Oxygen Saturation',
+          value: Math.round(oxygenSat),
+          unit: '%',
+          status: oxygenSat < 95 ? 'Low' : oxygenSat < 98 ? 'Borderline' : 'Normal',
+          history: healthData.oxygenSaturation?.values?.slice(-7) || []
+        },
+        {
+          name: 'Resting Heart Rate',
+          value: Math.round(heartRate),
+          unit: 'bpm',
+          status: heartRate > 100 ? 'Elevated' : 'Normal',
+          history: healthData.heartRate?.values?.slice(-7) || []
+        }
+      ],
+      recommendations: respiratoryRisk.recommendations
+    });
+
+    // 5. OBESITY AND METABOLIC SYNDROME
+    const calories = healthData.caloriesBurned?.average || 2000;
+    const metabolicRisk = calculateMetabolicRisk(steps, calories);
+    conditions.push({
+      name: 'Obesity & Metabolic Syndrome',
+      description: 'Weight management and metabolism',
+      riskLevel: metabolicRisk.level,
+      color: '#F97316',
+      icon: 'fitness',
+      keyMetrics: [
+        {
+          name: 'Daily Steps',
+          value: Math.round(steps),
+          unit: 'steps',
+          status: steps < 5000 ? 'Low' : steps > 10000 ? 'Excellent' : 'Good',
+          history: healthData.steps?.values?.slice(-7) || []
+        },
+        {
+          name: 'Calories Burned',
+          value: Math.round(calories),
+          unit: 'kcal',
+          status: calories < 1800 ? 'Low' : calories > 2500 ? 'High' : 'Normal',
+          history: healthData.caloriesBurned?.values?.slice(-7) || []
+        },
+        {
+          name: 'Activity Level',
+          value: Math.round((steps / 10000) * 100),
+          unit: '%',
+          status: steps < 5000 ? 'Inactive' : steps > 10000 ? 'Active' : 'Moderate',
+          history: []
+        }
+      ],
+      recommendations: metabolicRisk.recommendations
+    });
+
+    return conditions;
   };
 
-  const getSeverityIcon = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'high':
-        return 'alert-circle';
-      case 'moderate':
-        return 'alert-triangle';
-      case 'low':
-      case 'good':
-        return 'checkmark-circle';
-      default:
-        return 'information-circle';
-    }
-  };
-
-  const renderConditionCard = (condition, index) => {
-    const severityColor = getSeverityColor(condition.severity);
-    const severityIcon = getSeverityIcon(condition.severity);
+  // Risk calculation functions
+  const calculateCVDRisk = (heartRate, bp, steps) => {
+    let riskScore = 0;
     
-    return (
-      <View key={index} style={styles.conditionCard}>
-        <View style={styles.conditionHeader}>
-          <View style={styles.conditionTitleRow}>
-            <Icon name={severityIcon} size={20} color={severityColor} />
-            <Text style={styles.conditionTitle}>{condition.condition}</Text>
-          </View>
-          <View style={[styles.severityBadge, { backgroundColor: severityColor }]}>
-            <Text style={styles.severityText}>
-              {condition.severity?.toUpperCase() || 'UNKNOWN'}
-            </Text>
-          </View>
-        </View>
-        
-        <Text style={styles.conditionDescription}>{condition.description}</Text>
-        
-        {condition.metrics && (
-          <View style={styles.metricsContainer}>
-            <Text style={styles.metricsTitle}>Current Status</Text>
-            <View style={styles.metricsRow}>
-              {condition.metrics.current && (
-                <Text style={styles.metricValue}>
-                  Current: {condition.metrics.current}
-                  {condition.condition.includes('Steps') && ' steps'}
-                  {condition.condition.includes('Heart Rate') && ' bpm'}
-                  {condition.condition.includes('Sleep') && ' hours'}
-                </Text>
-              )}
-              {condition.metrics.trend && (
-                <Text style={[
-                  styles.trendIndicator,
-                  { color: condition.metrics.trend === 'stable' ? '#10B981' : '#F59E0B' }
-                ]}>
-                  Trend: {condition.metrics.trend}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-        
-        <View style={styles.recommendationsContainer}>
-          <Text style={styles.recommendationsTitle}>Recommendations</Text>
-          {condition.recommendations?.slice(0, 3).map((rec, idx) => (
-            <View key={idx} style={styles.recommendationItem}>
-              <Icon name="checkmark" size={12} color="#10B981" />
-              <Text style={styles.recommendationText}>{rec}</Text>
-            </View>
-          ))}
-          {condition.recommendations?.length > 3 && (
-            <TouchableOpacity 
-              style={styles.showMoreButton}
-              onPress={() => Alert.alert(condition.condition, condition.recommendations.join('\n• '))}
-            >
-              <Text style={styles.showMoreText}>
-                Show {condition.recommendations.length - 3} more recommendations
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
+    if (heartRate > 100 || heartRate < 50) riskScore += 2;
+    if (bp.systolic > 140 || bp.diastolic > 90) riskScore += 3;
+    if (steps < 5000) riskScore += 2;
+
+    const level = riskScore >= 5 ? 'high' : riskScore >= 3 ? 'moderate' : 'low';
+    
+    return {
+      level,
+      recommendations: [
+        'Regular cardiovascular exercise (30 min/day)',
+        'Monitor blood pressure daily',
+        'Maintain a low-sodium diet',
+        'Manage stress through meditation',
+        'Get adequate sleep (7-9 hours)',
+        'Quit smoking if applicable'
+      ]
+    };
+  };
+
+  const calculateDiabetesRisk = (glucose, steps) => {
+    let riskScore = 0;
+    
+    if (glucose > 125) riskScore += 3;
+    else if (glucose > 100) riskScore += 1;
+    if (steps < 5000) riskScore += 2;
+
+    const level = riskScore >= 4 ? 'high' : riskScore >= 2 ? 'moderate' : 'low';
+    
+    return {
+      level,
+      recommendations: [
+        'Monitor blood glucose regularly',
+        'Follow a balanced, low-sugar diet',
+        'Exercise regularly to improve insulin sensitivity',
+        'Maintain a healthy weight',
+        'Stay hydrated throughout the day',
+        'Limit processed foods and refined carbs'
+      ]
+    };
+  };
+
+  const calculateHypertensionRisk = (bp, stress) => {
+    let riskScore = 0;
+    
+    if (bp.systolic > 140) riskScore += 3;
+    else if (bp.systolic > 120) riskScore += 1;
+    if (bp.diastolic > 90) riskScore += 3;
+    else if (bp.diastolic > 80) riskScore += 1;
+    if (stress > 6) riskScore += 2;
+
+    const level = riskScore >= 5 ? 'high' : riskScore >= 2 ? 'moderate' : 'low';
+    
+    return {
+      level,
+      recommendations: [
+        'Reduce sodium intake (<2300mg/day)',
+        'Practice stress management techniques',
+        'Maintain regular sleep schedule',
+        'Exercise regularly but avoid intense workouts',
+        'Limit alcohol consumption',
+        'Monitor blood pressure twice daily'
+      ]
+    };
+  };
+
+  const calculateRespiratoryRisk = (oxygenSat, heartRate) => {
+    let riskScore = 0;
+    
+    if (oxygenSat < 95) riskScore += 3;
+    else if (oxygenSat < 98) riskScore += 1;
+    if (heartRate > 100) riskScore += 1;
+
+    const level = riskScore >= 3 ? 'moderate' : 'low';
+    
+    return {
+      level,
+      recommendations: [
+        'Practice deep breathing exercises',
+        'Avoid air pollutants and allergens',
+        'Stay up to date with vaccinations',
+        'Exercise regularly to improve lung capacity',
+        'Maintain good indoor air quality',
+        'Consider pulmonary rehabilitation if needed'
+      ]
+    };
+  };
+
+  const calculateMetabolicRisk = (steps, calories) => {
+    let riskScore = 0;
+    
+    if (steps < 5000) riskScore += 2;
+    if (calories < 1800 || calories > 2800) riskScore += 1;
+
+    const level = riskScore >= 2 ? 'moderate' : 'low';
+    
+    return {
+      level,
+      recommendations: [
+        'Aim for 10,000 steps daily',
+        'Follow a balanced Mediterranean diet',
+        'Include strength training 2-3x/week',
+        'Monitor portion sizes',
+        'Stay consistent with meal timing',
+        'Focus on whole foods over processed options'
+      ]
+    };
+  };
+
+  const handleConditionPress = (condition) => {
+    const detailsText = `${condition.name}\n\nRisk Level: ${condition.riskLevel.toUpperCase()}\n\n${condition.description}\n\nKey Metrics:\n${condition.keyMetrics.map(m => `• ${m.name}: ${m.value} ${m.unit} (${m.status})`).join('\n')}\n\nRecommendations:\n${condition.recommendations.slice(0, 3).map(r => `• ${r}`).join('\n')}`;
+    
+    Alert.alert(condition.name, detailsText, [{ text: 'OK' }]);
   };
 
   const renderNoDeviceState = () => (
     <View style={styles.noDeviceContainer}>
       <Icon name="watch" size={64} color="#9CA3AF" />
-      <Text style={styles.noDeviceTitle}>No Device Connected</Text>
+      <Text style={styles.noDeviceTitle}>Connect Your Smartwatch</Text>
       <Text style={styles.noDeviceDescription}>
-        Connect your smartwatch to monitor chronic conditions and get personalized health insights.
+        Connect your smartwatch to monitor chronic conditions and get personalized health insights based on real-time data.
       </Text>
       <TouchableOpacity 
         style={styles.connectDeviceButton}
@@ -342,6 +526,33 @@ export const ChronicMonitorsScreen = () => {
     </View>
   );
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {renderLoadingState()}
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasConnectedDevice) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Chronic Conditions Monitor</Text>
+            <Text style={styles.headerSubtitle}>5 Key Health Areas</Text>
+          </View>
+        </LinearGradient>
+        {renderNoDeviceState()}
+      </SafeAreaView>
+    );
+  }
+
+  const conditions = analyzeChronicConditions();
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -350,9 +561,9 @@ export const ChronicMonitorsScreen = () => {
       >
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>Chronic Monitors</Text>
+            <Text style={styles.headerTitle}>Chronic Conditions Monitor</Text>
             <Text style={styles.headerSubtitle}>
-              {hasConnectedDevice ? 'Based on your real-time health data' : 'Connect a device to get started'}
+              Based on your real-time health data
             </Text>
           </View>
           <TouchableOpacity onPress={onRefresh} disabled={isLoading}>
@@ -363,40 +574,39 @@ export const ChronicMonitorsScreen = () => {
 
       <ScrollView 
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
-          renderLoadingState()
-        ) : !hasConnectedDevice ? (
-          renderNoDeviceState()
-        ) : (
-          <View style={styles.conditionsContainer}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Health Overview</Text>
-              <Text style={styles.summaryText}>
-                {chronicConditions.length === 1 && chronicConditions[0].severity === 'good' 
-                  ? "Great job! Your health metrics are looking good." 
-                  : `Found ${chronicConditions.length} area${chronicConditions.length !== 1 ? 's' : ''} for attention.`
-                }
-              </Text>
-              <Text style={styles.lastUpdated}>
-                Last updated: {new Date().toLocaleString()}
-              </Text>
-            </View>
-            
-            {chronicConditions.map(renderConditionCard)}
-            
-            <View style={styles.disclaimerCard}>
-              <Icon name="information-circle" size={20} color="#6B7280" />
-              <Text style={styles.disclaimerText}>
-                This analysis is based on your smartwatch data and is for informational purposes only. 
-                Always consult with healthcare professionals for medical advice.
-              </Text>
-            </View>
-          </View>
-        )}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Health Overview</Text>
+          <Text style={styles.summaryText}>
+            Monitoring 5 key chronic conditions based on your real-time health metrics from your connected smartwatch.
+          </Text>
+          <Text style={styles.lastUpdated}>
+            Last updated: {new Date().toLocaleString()}
+          </Text>
+        </View>
+
+        <View style={styles.conditionsGrid}>
+          {conditions.map((condition, index) => (
+            <ChronicConditionCard
+              key={index}
+              condition={condition}
+              onPress={handleConditionPress}
+            />
+          ))}
+        </View>
+
+        <View style={styles.disclaimerCard}>
+          <Icon name="information" size={20} color="#6B7280" />
+          <Text style={styles.disclaimerText}>
+            This analysis is based on your smartwatch data and general health guidelines. 
+            Always consult with healthcare professionals for medical advice and diagnosis.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -418,7 +628,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
@@ -433,7 +643,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     backgroundColor: '#F9FAFB',
+  },
+  contentContainer: {
     paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 120, // Extra padding for tab bar to avoid conflicts
   },
   loadingContainer: {
     flex: 1,
@@ -447,16 +661,11 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   noDeviceContainer: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 40,
     marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   noDeviceTitle: {
     fontSize: 20,
@@ -485,14 +694,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '600',
   },
-  conditionsContainer: {
-    paddingHorizontal: 20,
-  },
   summaryCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -515,6 +721,9 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 8,
   },
+  conditionsGrid: {
+    marginBottom: 20,
+  },
   conditionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -526,94 +735,120 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  conditionHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  conditionTitleRow: {
-    flexDirection: 'row',
+  cardIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
   },
-  conditionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginLeft: 8,
-    flex: 1,
-  },
-  severityBadge: {
+  riskBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  severityText: {
+  riskText: {
     fontSize: 10,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  conditionName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
   conditionDescription: {
     fontSize: 14,
     color: '#6B7280',
-    lineHeight: 20,
     marginBottom: 16,
   },
-  metricsContainer: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+  metricsSection: {
     marginBottom: 16,
   },
   metricsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metricItem: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  metricStatus: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  chartSection: {
+    marginBottom: 16,
+  },
+  chartTitle: {
     fontSize: 12,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
   },
-  metricsRow: {
+  chartContainer: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  chartBar: {
+    borderRadius: 2,
+    marginHorizontal: 1,
+  },
+  chartPlaceholder: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  metricValue: {
-    fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '500',
+  noChartText: {
+    fontSize: 10,
+    color: '#9CA3AF',
   },
-  trendIndicator: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  recommendationsContainer: {
-    marginTop: 4,
+  recommendationsPreview: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 12,
   },
   recommendationsTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  recommendationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
+    color: '#374151',
+    marginBottom: 4,
   },
   recommendationText: {
-    fontSize: 13,
-    color: '#4B5563',
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 18,
-  },
-  showMoreButton: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  showMoreText: {
     fontSize: 12,
+    color: '#4B5563',
+    lineHeight: 16,
+  },
+  moreRecommendations: {
+    fontSize: 11,
     color: '#4F46E5',
+    marginTop: 4,
     fontWeight: '500',
   },
   disclaimerCard: {
@@ -622,8 +857,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB',
     borderRadius: 12,
     padding: 16,
-    marginTop: 16,
-    marginBottom: 32,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#FED7AA',
   },

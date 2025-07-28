@@ -5,6 +5,7 @@ import {
   PermissionsAndroid,
   Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import your API service
 let api;
@@ -31,12 +32,6 @@ class BluetoothManager {
     this.eventEmitter = null;
     this.webBluetoothDevice = null;
     this.webCharacteristics = {};
-    
-    // Initialize event emitter for native events
-    if (HBandSDK && Platform.OS !== 'web') {
-      this.eventEmitter = new NativeEventEmitter(HBandSDK);
-      this.setupEventListeners();
-    }
     
     console.log('BluetoothManager initialized for platform:', Platform.OS);
   }
@@ -258,6 +253,109 @@ class BluetoothManager {
     }
   }
 
+  // Updated syncHealthDataWithBackend method
+  async syncHealthDataWithBackend(healthData) {
+    if (!api) {
+      console.error('❌ API service not available');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Starting health data sync...');
+      
+      // Get current user with detailed logging
+      const currentUser = await this.getCurrentUser();
+      
+      if (!currentUser || !currentUser.id) {
+        console.error('❌ User not authenticated - cannot sync health data');
+        console.error('Current user object:', currentUser);
+        
+        // Show user-friendly error
+        Alert.alert(
+          'Authentication Required',
+          'Please log out and log back in to sync your health data.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      console.log('✅ User authenticated for sync:', {
+        id: currentUser.id,
+        email: currentUser.email
+      });
+
+      // Get connected device info - be more flexible here
+      let deviceInfo = this.connectedDevice;
+      if (!deviceInfo && healthData.deviceInfo) {
+        // Fallback to device info from health data
+        deviceInfo = {
+          name: healthData.deviceInfo.name,
+          address: healthData.deviceInfo.address,
+          deviceType: 'hband'
+        };
+        console.log('🔧 Using device info from health data:', deviceInfo);
+      }
+
+      if (!deviceInfo) {
+        console.error('❌ No device info available - cannot sync health data');
+        return;
+      }
+
+      console.log('✅ Device info available:', {
+        name: deviceInfo.name,
+        type: deviceInfo.deviceType,
+        address: deviceInfo.address
+      });
+
+      // Construct payload matching RealTimeHealthData model
+      const payload = {
+        user_id: currentUser.id,
+        device_type: deviceInfo.deviceType || 'hband',
+        device_id: deviceInfo.address || deviceInfo.id || 'unknown',
+        timestamp: healthData.timestamp || new Date().toISOString(),
+        data: { ...healthData }
+      };
+
+      // Remove redundant fields from data
+      if (payload.data.deviceInfo) {
+        delete payload.data.deviceInfo;
+      }
+      if (payload.data.timestamp) {
+        delete payload.data.timestamp;
+      }
+
+      console.log('🔄 Syncing health data with payload:');
+      console.log('  User ID:', payload.user_id);
+      console.log('  Device Type:', payload.device_type);
+      console.log('  Device ID:', payload.device_id);
+      console.log('  Data keys:', Object.keys(payload.data));
+
+      // Sync to backend using your API service
+      const result = await api.syncHealthData(payload);
+      console.log('✅ Health data synced successfully:', result);
+      
+    } catch (error) {
+      console.error('❌ Failed to sync health data with backend:', error);
+      
+      // Handle specific error types
+      if (error.message.includes('Authentication failed')) {
+        Alert.alert(
+          'Authentication Error',
+          'Your session has expired. Please log out and log back in.',
+          [{ text: 'OK' }]
+        );
+      } else if (error.message.includes('User ID mismatch')) {
+        Alert.alert(
+          'Sync Error',
+          'There was an authentication issue. Please log out and log back in.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        console.error('Sync error details:', error.message);
+      }
+    }
+  }
+
   // Simulate device discovery for demo purposes
   simulateDeviceScan(timeoutMs) {
     console.log('Starting demo device scan...');
@@ -420,13 +518,20 @@ class BluetoothManager {
 
   // Simulate device connection for demo
   simulateDeviceConnection(device) {
-    console.log('Simulating device connection...');
+    console.log('🎭 Simulating device connection...');
     
     setTimeout(() => {
-      this.connectedDevice = device;
+      // Store the device before triggering the event
+      this.connectedDevice = {
+        ...device,
+        deviceType: device.deviceType || 'hband'
+      };
+      
+      console.log('✅ Simulated device stored:', this.connectedDevice);
+      
       this.handleConnectionStatusChanged({
         connected: true,
-        device: device,
+        device: this.connectedDevice,
         message: 'Connected successfully (Demo mode)'
       });
     }, 2000);
@@ -653,10 +758,12 @@ class BluetoothManager {
   }
 
   handleConnectionStatusChanged(status) {
-    console.log('Connection status changed:', status);
+    console.log('🔗 Connection status changed:', status);
     
     if (status.connected && status.device) {
+      // Store the connected device
       this.connectedDevice = status.device;
+      console.log('✅ Device connected and stored:', this.connectedDevice.name);
       
       // Register device with backend
       if (api) {
@@ -669,6 +776,7 @@ class BluetoothManager {
       }, 2000);
       
     } else if (!status.connected) {
+      console.log('❌ Device disconnected');
       this.connectedDevice = null;
       this.stopHealthMonitoring().catch(console.error);
     }
@@ -677,12 +785,29 @@ class BluetoothManager {
   }
 
   handleHealthDataReceived(data) {
-    console.log('Health data received:', data);
+    console.log('📊 Health data received:', data);
     const formattedData = this.formatHealthData(data);
     
-    // Send to backend if API is available
+    // Make sure we have a connected device reference
+    if (!this.connectedDevice) {
+      console.warn('⚠️ Health data received but no connected device reference');
+      // Try to reconstruct device info from data if available
+      if (data.deviceInfo) {
+        this.connectedDevice = {
+          name: data.deviceInfo.name,
+          address: data.deviceInfo.address,
+          deviceType: 'hband', // Default type
+          batteryLevel: data.deviceInfo.batteryLevel
+        };
+        console.log('🔧 Reconstructed device info:', this.connectedDevice);
+      }
+    }
+    
+    // Send to backend if API is available and we have device info
     if (api && this.connectedDevice) {
       this.syncHealthDataWithBackend(formattedData);
+    } else {
+      console.warn('⚠️ Cannot sync - missing API or device connection');
     }
     
     this.notifyListeners('healthDataReceived', formattedData);
@@ -780,39 +905,63 @@ class BluetoothManager {
     }
   }
 
-  async syncHealthDataWithBackend(healthData) {
-    if (!api) return;
-    
-    try {
-      // Get current user from context or storage
-      const currentUser = await this.getCurrentUser();
-      
-      const result = await api.syncHealthData({
-        user_id: currentUser?.id || 'unknown',
-        device_type: this.connectedDevice?.deviceType || 'smartwatch',
-        device_id: this.connectedDevice?.address || 'unknown',
-        timestamp: new Date().toISOString(),
-        data: healthData
-      });
-      
-      console.log('Health data synced with backend:', result);
-    } catch (error) {
-      console.error('Failed to sync health data with backend:', error);
-    }
-  }
-
   async getCurrentUser() {
-    // This should integrate with your auth context
-    // For now, return a placeholder
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const userData = localStorage.getItem('userData');
-        return userData ? JSON.parse(userData) : null;
+      console.log('🔍 Getting current user from React Native storage...');
+      
+      let userToken, userData;
+      
+      if (Platform.OS === 'web') {
+        userToken = typeof localStorage !== 'undefined' ? localStorage.getItem('userToken') : null;
+        userData = typeof localStorage !== 'undefined' ? localStorage.getItem('userData') : null;
+      } else {
+        // React Native
+        userToken = await AsyncStorage.getItem('userToken');
+        userData = await AsyncStorage.getItem('userData');
+      }
+      
+      console.log('🔍 Storage check:');
+      console.log('  Token exists:', !!userToken);
+      console.log('  User data exists:', !!userData);
+      
+      if (!userToken) {
+        console.warn('❌ No auth token found in storage');
+        return null;
+      }
+      
+      if (!userData) {
+        console.warn('❌ No user data found in storage');
+        return null;
+      }
+      
+      try {
+        const user = JSON.parse(userData);
+        console.log('🔍 Parsed user data:', {
+          hasId: !!user.id,
+          hasEmail: !!user.email,
+          hasName: !!user.name
+        });
+        
+        // Verify user has required fields
+        if (user && user.id) {
+          console.log('✅ Valid user found:', {
+            id: user.id,
+            email: user.email,
+            name: user.name
+          });
+          return user;
+        } else {
+          console.warn('❌ User object missing required fields:', user);
+          return null;
+        }
+      } catch (parseError) {
+        console.error('❌ Error parsing user data:', parseError);
+        return null;
       }
     } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error('❌ Error getting current user:', error);
+      return null;
     }
-    return null;
   }
 
   // Public API methods

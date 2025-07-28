@@ -1,21 +1,24 @@
-// Updated HomeScreen with proper device connection
+// Updated HomeScreen.tsx with integrated Health Dashboard
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  Alert,
-  Platform,
-  FlatList,
-  ActivityIndicator
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  StyleSheet, 
+  ScrollView, 
+  Alert, 
+  Platform, 
+  FlatList, 
+  ActivityIndicator,
+  Dimensions,
+  StatusBar
 } from 'react-native';
 import { useAuth, useHealth } from './context';
 import BluetoothManager from './bluetoothManager';
+import { api } from './api_service';
+import { HealthDashboard} from './HealthDashboardComponent'; // Import the new component
 
-// Simple fallback icons
+// Simple components
 const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
   <View style={[{
     width: size,
@@ -45,8 +48,10 @@ const LinearGradient = ({ colors, children, style, ...props }) => (
   </View>
 );
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 export const HomeScreen = () => {
-  const { authState } = useAuth();
+  const { authState, signOut } = useAuth();
   const { healthState, fetchHealthData, connectDevice } = useHealth();
   
   // Device connection state
@@ -54,7 +59,6 @@ export const HomeScreen = () => {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [showDeviceList, setShowDeviceList] = useState(false);
-  const [healthData, setHealthData] = useState(null);
 
   useEffect(() => {
     // Initialize Bluetooth Manager
@@ -67,13 +71,6 @@ export const HomeScreen = () => {
       BluetoothManager.cleanup();
     };
   }, []);
-
-  useEffect(() => {
-    // Fetch health data when device is connected
-    if (connectedDevice) {
-      fetchUserHealthData();
-    }
-  }, [connectedDevice]);
 
   const initializeBluetoothManager = async () => {
     try {
@@ -89,8 +86,8 @@ export const HomeScreen = () => {
     }
   };
 
-  const handleBluetoothEvent = (event, data) => {
-    console.log('Bluetooth Event:', event, data);
+  const handleBluetoothEvent = async (event, data) => {
+    console.log('🔗 Bluetooth Event:', event, data);
     
     switch (event) {
       case 'scanStarted':
@@ -119,13 +116,12 @@ export const HomeScreen = () => {
           Alert.alert('Success', `Connected to ${data.device.name || 'device'} successfully!`);
         } else if (!data.connected) {
           setConnectedDevice(null);
-          setHealthData(null);
         }
         break;
         
       case 'healthDataReceived':
-        setHealthData(data);
-        console.log('Health data received:', data);
+        console.log('📊 Health data received on HomeScreen:', data);
+        // The sync will be handled by BluetoothManager
         break;
         
       case 'bluetoothError':
@@ -165,13 +161,6 @@ export const HomeScreen = () => {
     try {
       console.log('Connecting to device:', device.name);
       
-      // Show connecting state
-      Alert.alert(
-        'Connecting',
-        `Connecting to ${device.name}...`,
-        [{ text: 'Cancel', onPress: () => BluetoothManager.stopScan() }]
-      );
-      
       // Connect using Bluetooth Manager
       await BluetoothManager.connectToDevice(device.id, device.address);
       
@@ -179,7 +168,7 @@ export const HomeScreen = () => {
       await connectDevice({
         device_name: device.name,
         device_address: device.address,
-        device_type: device.deviceType || 'smartwatch',
+        device_type: device.deviceType || 'hband',
         manufacturer: device.manufacturer
       });
       
@@ -202,22 +191,12 @@ export const HomeScreen = () => {
             onPress: async () => {
               await BluetoothManager.disconnectDevice();
               setConnectedDevice(null);
-              setHealthData(null);
             }
           }
         ]
       );
     } catch (error) {
       console.error('Disconnect error:', error);
-    }
-  };
-
-  const fetchUserHealthData = async () => {
-    try {
-      const data = await fetchHealthData('day');
-      setHealthData(data);
-    } catch (error) {
-      console.error('Error fetching health data:', error);
     }
   };
 
@@ -242,156 +221,129 @@ export const HomeScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderHealthMetrics = () => {
-    if (!healthData || !connectedDevice) return null;
-
-    const metrics = [
-      { key: 'steps', label: 'Steps', icon: 'walk', unit: 'steps' },
-      { key: 'heartRate', label: 'Heart Rate', icon: 'heart', unit: 'bpm' },
-      { key: 'sleep', label: 'Sleep', icon: 'bed', unit: 'hrs' },
-      { key: 'caloriesBurned', label: 'Calories', icon: 'flame', unit: 'kcal' }
-    ];
-
-    return (
-      <View style={styles.healthMetricsContainer}>
-        <Text style={styles.healthMetricsTitle}>Today's Health Data</Text>
-        <View style={styles.metricsGrid}>
-          {metrics.map((metric) => {
-            const data = healthData[metric.key];
-            const value = data?.current_value || data?.average || 0;
-            
-            return (
-              <View key={metric.key} style={styles.metricCard}>
-                <Icon name={metric.icon} size={24} color="#4F46E5" />
-                <Text style={styles.metricLabel}>{metric.label}</Text>
-                <Text style={styles.metricValue}>
-                  {typeof value === 'number' ? Math.round(value) : value}
-                </Text>
-                <Text style={styles.metricUnit}>{metric.unit}</Text>
-              </View>
-            );
-          })}
-        </View>
-        <Text style={styles.lastSync}>
-          Last sync: {new Date().toLocaleTimeString()}
-        </Text>
-      </View>
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.homeHeaderGradient}
-      >
-        <View style={styles.homeHeader}>
-          <View>
-            <Text style={styles.greetingText}>Good Morning</Text>
-            <Text style={styles.userNameText}>{authState?.user?.name || 'User'}</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Icon name="notifications" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.homeContent}>
-        {!connectedDevice ? (
-          // No device connected - show connection options
-          <View style={styles.connectDeviceCard}>
-            <Icon name="watch" size={48} color="#4F46E5" />
-            <Text style={styles.connectTitle}>Connect Your Device</Text>
-            <Text style={styles.connectDescription}>
-              Connect your smartwatch to start monitoring your health in real-time
-            </Text>
-            <TouchableOpacity 
-              style={styles.connectButton} 
-              onPress={startDeviceScan}
-              disabled={isScanning}
-            >
-              {isScanning ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Icon name="bluetooth" size={20} color="#FFFFFF" />
-              )}
-              <Text style={styles.connectButtonText}>
-                {isScanning ? 'Scanning...' : 'Scan for Devices'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Device connected - show device info and health data
-          <View style={styles.connectedDeviceCard}>
-            <View style={styles.connectedDeviceHeader}>
-              <View style={styles.connectedDeviceIcon}>
-                <Icon name="checkmark-circle" size={24} color="#10B981" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+      
+      {/* Main Content */}
+      {!connectedDevice ? (
+        // Device Connection Screen
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <LinearGradient 
+            colors={['#4F46E5', '#7C3AED']} 
+            style={styles.homeHeaderGradient}
+          >
+            <View style={styles.homeHeader}>
+              <View>
+                <Text style={styles.greetingText}>Good Morning</Text>
+                <Text style={styles.userNameText}>
+                  {authState?.user?.name || 'User'}
+                </Text>
               </View>
-              <View style={styles.connectedDeviceInfo}>
-                <Text style={styles.connectedDeviceName}>{connectedDevice.name}</Text>
-                <Text style={styles.connectedDeviceStatus}>Connected via Bluetooth</Text>
-              </View>
-              <TouchableOpacity onPress={disconnectDevice}>
-                <Icon name="close-circle" size={24} color="#EF4444" />
-              </TouchableOpacity>
             </View>
-          </View>
-        )}
+          </LinearGradient>
 
-        {/* Health Metrics Display */}
-        {renderHealthMetrics()}
-
-        {/* Device List Modal/Overlay */}
-        {showDeviceList && (
-          <View style={styles.deviceListOverlay}>
-            <View style={styles.deviceListContainer}>
-              <View style={styles.deviceListHeader}>
-                <Text style={styles.deviceListTitle}>Available Devices</Text>
-                <TouchableOpacity 
-                  onPress={() => {
-                    setShowDeviceList(false);
-                    BluetoothManager.stopScan();
-                  }}
-                >
-                  <Icon name="close" size={24} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-              
-              {isScanning && (
-                <View style={styles.scanningIndicator}>
-                  <ActivityIndicator size="small" color="#4F46E5" />
-                  <Text style={styles.scanningText}>Scanning for devices...</Text>
-                </View>
-              )}
-
-              <FlatList
-                data={discoveredDevices}
-                renderItem={renderDeviceItem}
-                keyExtractor={(item) => item.id || item.address}
-                style={styles.deviceList}
-                ListEmptyComponent={
-                  !isScanning ? (
-                    <Text style={styles.noDevicesText}>
-                      No devices found. Make sure your smartwatch is in pairing mode and try again.
-                    </Text>
-                  ) : null
-                }
-              />
-              
+          {/* Connection Card */}
+          <View style={styles.homeContent}>
+            <View style={styles.connectDeviceCard}>
+              <Icon name="bluetooth" size={48} color="#4F46E5" />
+              <Text style={styles.connectTitle}>Connect Your Device</Text>
+              <Text style={styles.connectDescription}>
+                Connect your smartwatch to start monitoring your health in real-time
+              </Text>
               <TouchableOpacity 
-                style={styles.rescanButton}
+                style={styles.connectButton} 
                 onPress={startDeviceScan}
                 disabled={isScanning}
               >
-                <Text style={styles.rescanButtonText}>
-                  {isScanning ? 'Scanning...' : 'Scan Again'}
+                {isScanning ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Icon name="bluetooth" size={20} color="#FFFFFF" />
+                )}
+                <Text style={styles.connectButtonText}>
+                  {isScanning ? 'Scanning...' : 'Scan for Devices'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      ) : (
+        // Health Dashboard Screen (when device is connected)
+        <View style={styles.dashboardContainer}>
+          {/* Connected Device Status Bar */}
+          <View style={styles.connectedDeviceBar}>
+            <View style={styles.connectedDeviceInfo}>
+              <Icon name="bluetooth-connected" size={16} color="#10B981" />
+              <Text style={styles.connectedDeviceText}>
+                {connectedDevice.name} Connected
+              </Text>
+            </View>
+            <TouchableOpacity onPress={disconnectDevice} style={styles.disconnectButton}>
+              <Icon name="close" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Health Dashboard */}
+          <HealthDashboard />
+        </View>
+      )}
+
+      {/* Device List Modal */}
+      {showDeviceList && (
+        <View style={styles.deviceListOverlay}>
+          <View style={styles.deviceListContainer}>
+            <View style={styles.deviceListHeader}>
+              <Text style={styles.deviceListTitle}>Available Devices</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowDeviceList(false);
+                  BluetoothManager.stopScan();
+                }}
+              >
+                <Icon name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {isScanning && (
+              <View style={styles.scanningIndicator}>
+                <ActivityIndicator size="small" color="#4F46E5" />
+                <Text style={styles.scanningText}>Scanning for devices...</Text>
+              </View>
+            )}
+
+            <FlatList
+              data={discoveredDevices}
+              renderItem={renderDeviceItem}
+              keyExtractor={(item) => item.id || item.address}
+              style={styles.deviceList}
+              ListEmptyComponent={
+                !isScanning ? (
+                  <Text style={styles.noDevicesText}>
+                    No devices found. Make sure your smartwatch is in pairing mode and try again.
+                  </Text>
+                ) : null
+              }
+            />
+
+            <TouchableOpacity 
+              style={styles.rescanButton} 
+              onPress={startDeviceScan}
+              disabled={isScanning}
+            >
+              <Text style={styles.rescanButtonText}>
+                {isScanning ? 'Scanning...' : 'Scan Again'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -400,28 +352,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 80,
+  },
   homeHeaderGradient: {
-    paddingTop: Platform.OS === 'ios' ? 0 : 20,
+    paddingTop: Platform.OS === 'ios' ? 40 : (Platform.OS === 'android' && StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 30),
+    minHeight: screenHeight * 0.12,
   },
   homeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Math.max(screenWidth * 0.05, 20),
     paddingVertical: 20,
+    minHeight: 80,
   },
   greetingText: {
-    fontSize: 16,
+    fontSize: Math.min(screenWidth * 0.04, 16),
     color: '#E5E7EB',
     fontWeight: '400',
   },
   userNameText: {
-    fontSize: 24,
+    fontSize: Math.min(screenWidth * 0.06, 24),
     color: '#FFFFFF',
     fontWeight: 'bold',
-  },
-  notificationButton: {
-    padding: 8,
+    marginTop: 4,
   },
   homeContent: {
     flex: 1,
@@ -430,11 +389,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     backgroundColor: '#F9FAFB',
     paddingTop: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: Math.max(screenWidth * 0.05, 20),
+    minHeight: screenHeight * 0.6,
   },
   connectDeviceCard: {
     alignItems: 'center',
-    padding: 32,
+    padding: Math.max(screenWidth * 0.08, 30),
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
     marginBottom: 20,
@@ -443,9 +403,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    minHeight: screenHeight * 0.25,
+    justifyContent: 'center',
   },
   connectTitle: {
-    fontSize: 20,
+    fontSize: Math.min(screenWidth * 0.05, 20),
     fontWeight: 'bold',
     color: '#1F2937',
     marginTop: 16,
@@ -453,101 +415,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   connectDescription: {
-    fontSize: 14,
+    fontSize: Math.min(screenWidth * 0.035, 14),
     color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
+    paddingHorizontal: 20,
+    lineHeight: 20,
   },
   connectButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#4F46E5',
-    paddingHorizontal: 24,
+    paddingHorizontal: Math.max(screenWidth * 0.06, 24),
     paddingVertical: 12,
     borderRadius: 12,
+    minWidth: screenWidth * 0.4,
+    justifyContent: 'center',
   },
   connectButtonText: {
     color: '#FFFFFF',
     marginLeft: 8,
     fontWeight: '600',
+    fontSize: Math.min(screenWidth * 0.04, 16),
   },
-  connectedDeviceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  connectedDeviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  connectedDeviceIcon: {
-    marginRight: 12,
-  },
-  connectedDeviceInfo: {
+  
+  // Dashboard styles
+  dashboardContainer: {
     flex: 1,
   },
-  connectedDeviceName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  connectedDeviceBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
   },
-  connectedDeviceStatus: {
+  connectedDeviceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  connectedDeviceText: {
+    marginLeft: 8,
     fontSize: 14,
     color: '#10B981',
-    marginTop: 2,
+    fontWeight: '600',
   },
-  healthMetricsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+  disconnectButton: {
+    padding: 4,
   },
-  healthMetricsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  metricCard: {
-    width: '48%',
-    alignItems: 'center',
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  metricUnit: {
-    fontSize: 10,
-    color: '#9CA3AF',
-  },
-  lastSync: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginTop: 16,
-  },
+
+  // Device list styles
   deviceListOverlay: {
     position: 'absolute',
     top: 0,
@@ -557,14 +478,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: Math.max(screenWidth * 0.05, 20),
+    paddingVertical: 50,
   },
   deviceListContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     width: '100%',
-    maxHeight: '80%',
+    maxHeight: screenHeight * 0.7,
+    maxWidth: 400,
   },
   deviceListHeader: {
     flexDirection: 'row',
@@ -573,7 +496,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   deviceListTitle: {
-    fontSize: 18,
+    fontSize: Math.min(screenWidth * 0.045, 18),
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -586,10 +509,10 @@ const styles = StyleSheet.create({
   scanningText: {
     marginLeft: 8,
     color: '#4F46E5',
-    fontSize: 14,
+    fontSize: Math.min(screenWidth * 0.035, 14),
   },
   deviceList: {
-    maxHeight: 300,
+    maxHeight: screenHeight * 0.35,
   },
   deviceItem: {
     flexDirection: 'row',
@@ -605,25 +528,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deviceName: {
-    fontSize: 16,
+    fontSize: Math.min(screenWidth * 0.04, 16),
     fontWeight: '600',
     color: '#1F2937',
   },
   deviceDetails: {
-    fontSize: 12,
+    fontSize: Math.min(screenWidth * 0.03, 12),
     color: '#6B7280',
     marginTop: 2,
   },
   deviceBattery: {
-    fontSize: 12,
+    fontSize: Math.min(screenWidth * 0.03, 12),
     color: '#10B981',
     marginTop: 2,
   },
   noDevicesText: {
     textAlign: 'center',
     color: '#6B7280',
-    fontSize: 14,
+    fontSize: Math.min(screenWidth * 0.035, 14),
     padding: 20,
+    lineHeight: 20,
   },
   rescanButton: {
     backgroundColor: '#4F46E5',
@@ -635,5 +559,6 @@ const styles = StyleSheet.create({
   rescanButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: Math.min(screenWidth * 0.04, 16),
   },
 });

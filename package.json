@@ -1,53 +1,38 @@
 {
-  "name": "xevox-health",
+  "name": "xevox-mobile-app",
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "eject": "expo eject",
-    "prebuild": "expo prebuild",
-    "android:clean": "cd android && ./gradlew clean",
-    "ios:clean": "cd ios && rm -rf build && rm -rf Pods && rm Podfile.lock"
+    "web": "expo start --web"
   },
   "dependencies": {
-    "@expo/webpack-config": "^0.17.4",
-    "@react-native-async-storage/async-storage": "^2.1.2",
-    "@react-navigation/bottom-tabs": "^7.3.9",
-    "@react-navigation/native": "^7.1.5",
-    "@react-navigation/stack": "^7.2.9",
-    "axios": "^1.8.4",
-    "expo": "^52.0.44",
-    "expo-web-browser": "^14.0.2",
-    "expo-device": "~6.0.2",
-    "expo-constants": "~17.0.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "react-native": "0.73.6",
-    "react-native-chart-kit": "^6.12.0",
-    "react-native-vector-icons": "^10.2.0",
-    "react-native-web": "~0.19.6",
-    "react-native-ble-plx": "^3.1.2",
-    "react-native-permissions": "^4.1.5",
-    "expo-linear-gradient": "~13.0.2",
-    "expo-blur": "~13.0.2"
+    "@expo/metro-config": "^0.20.17",
+    "@expo/metro-runtime": "~5.0.4",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/bottom-tabs": "^6.6.1",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/stack": "^6.4.1",
+    "@types/react": "~19.0.10",
+    "expo": "^53.0.20",
+    "expo-constants": "~17.1.7",
+    "expo-dev-client": "~5.2.4",
+    "expo-dev-launcher": "~3.4.0",
+    "expo-status-bar": "~2.2.3",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.79.5",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1",
+    "react-native-web": "^0.20.0",
+    "typescript": "^5.3.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0",
-    "@types/react": "~18.3.12",
-    "babel-loader": "^8.2.5",
-    "babel-plugin-react-native-web": "^0.19.6",
-    "typescript": "^5.3.3",
-    "webpack": "^5.73.0",
-    "webpack-cli": "^4.10.0",
-    "webpack-dev-server": "^4.9.2"
-  },
-  "expo": {
-    "install": {
-      "exclude": ["react-native-safe-area-context"]
-    }
+    "@babel/core": "^7.20.0"
   },
   "private": true
 }
