@@ -1,4 +1,3 @@
-// Fixed ProfileScreen.tsx - Silent logout with proper state management
 import React from 'react';
 import {
   View,

@@ -4,8 +4,8 @@ class ApiService {
     this.authToken = null;
     this.baseURL = 'http://192.168.1.107:5000';
     this.isLoggingOut = false;
-    this.realDeviceConnected = false; // Track real device connection
-    this.deviceInfo = null; // Store connected device info
+    this.realDeviceConnected = false;
+    this.deviceInfo = null;
   }
 
   setAuthToken(token) {
@@ -13,13 +13,11 @@ class ApiService {
     console.log('🔑 Auth token set:', token ? 'Token exists' : 'Token cleared');
   }
 
-  // Set logout state
   setLoggingOut(isLoggingOut) {
     this.isLoggingOut = isLoggingOut;
     console.log('🚪 Logout state:', isLoggingOut ? 'Logging out' : 'Normal operation');
   }
 
-  // Track real device connection
   setRealDeviceConnected(isConnected, deviceInfo = null) {
     this.realDeviceConnected = isConnected;
     this.deviceInfo = deviceInfo;
@@ -29,7 +27,6 @@ class ApiService {
     }
   }
 
-  // Get auth headers with proper token
   getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json',
@@ -39,7 +36,6 @@ class ApiService {
       headers['Authorization'] = `Bearer ${this.authToken}`;
       console.log('🔑 Including auth header with token');
     } else {
-      // Don't warn if we're logging out - it's expected
       if (!this.isLoggingOut) {
         console.warn('⚠️ No auth token available');
       }
@@ -50,6 +46,8 @@ class ApiService {
 
   async login(email, password) {
     try {
+      console.log('🔐 Attempting login for:', email);
+      
       const response = await fetch(`${this.baseURL}/api/login`, {
         method: 'POST',
         headers: {
@@ -72,7 +70,7 @@ class ApiService {
           token: result.token,
           user: {
             id: result.id,
-            name: result.name,
+            name: result.name,  
             email: email,
           },
         };
@@ -93,6 +91,8 @@ class ApiService {
 
   async register(userData) {
     try {
+      console.log('📝 Attempting registration for:', userData.email);
+      
       const response = await fetch(`${this.baseURL}/api/register`, {
         method: 'POST',
         headers: {
@@ -124,7 +124,6 @@ class ApiService {
 
   async logout() {
     try {
-      // Set logout state to prevent unnecessary warnings
       this.setLoggingOut(true);
       
       const response = await fetch(`${this.baseURL}/api/logout`, {
@@ -133,7 +132,6 @@ class ApiService {
         credentials: 'include',
       });
 
-      // Clear device connection state on logout
       this.setRealDeviceConnected(false, null);
 
       return { success: response.ok };
@@ -141,13 +139,11 @@ class ApiService {
       console.error('Logout error:', error);
       return { success: false };
     } finally {
-      // Clear logout state
       this.setLoggingOut(false);
     }
   }
 
   async getUserInfo() {
-    // Don't try if logging out
     if (this.isLoggingOut) {
       console.log('👤 Skipping getUserInfo during logout');
       return null;
@@ -168,7 +164,6 @@ class ApiService {
     } catch (error) {
       console.error('Get user info error:', error);
       
-      // Don't throw during logout - just return null
       if (this.isLoggingOut) {
         console.log('👤 getUserInfo failed during logout (expected)');
         return null;
@@ -178,9 +173,7 @@ class ApiService {
     }
   }
 
-  // Enhanced getHealthData with real data validation
   async getHealthData(timeframe = 'day') {
-    // Don't try if logging out or no token
     if (this.isLoggingOut) {
       console.log('👤 Skipping getHealthData during logout');
       return {};
@@ -206,7 +199,6 @@ class ApiService {
         const data = await response.json();
         console.log('📊 Health data received:', Object.keys(data));
         
-        // Validate that we only accept real device data
         const validatedData = this.validateRealHealthData(data);
         console.log('📊 Validated real data keys:', Object.keys(validatedData));
         
@@ -215,7 +207,6 @@ class ApiService {
         const errorText = await response.text();
         console.error('📊 Health data fetch failed:', response.status, errorText);
         
-        // Don't throw during logout - return empty data
         if (this.isLoggingOut || response.status === 401) {
           console.log('👤 Health data fetch failed during logout/auth error (expected)');
           return {};
@@ -226,7 +217,6 @@ class ApiService {
     } catch (error) {
       console.error('📊 Get health data error:', error);
       
-      // Return empty data instead of throwing during logout
       if (this.isLoggingOut) {
         console.log('👤 getHealthData error during logout (expected)');
         return {};
@@ -236,7 +226,6 @@ class ApiService {
     }
   }
 
-  // Validate that health data is from real devices only
   validateRealHealthData(data) {
     if (!data || typeof data !== 'object') {
       console.warn('⚠️ Invalid health data received');
@@ -246,22 +235,18 @@ class ApiService {
     const validatedData = {};
     let realDataCount = 0;
 
-    // Check each metric for real data indicators
     for (const [key, value] of Object.entries(data)) {
       if (key === '_metadata') {
-        // Preserve metadata
         validatedData[key] = value;
         continue;
       }
 
       if (value && typeof value === 'object') {
-        // Check if this metric is marked as real data
         if (value.is_real === true) {
           validatedData[key] = value;
           realDataCount++;
           console.log(`✅ Validated real data for ${key}`);
         } else {
-          // Create empty structure for non-real data
           validatedData[key] = {
             values: [],
             timestamps: [],
@@ -274,7 +259,6 @@ class ApiService {
           console.log(`❌ Rejected non-real data for ${key}`);
         }
       } else {
-        // Empty structure for invalid data
         validatedData[key] = {
           values: [],
           timestamps: [],
@@ -289,7 +273,6 @@ class ApiService {
 
     console.log(`📊 Validated ${realDataCount} real health metrics out of ${Object.keys(data).length} total`);
     
-    // Add validation metadata
     validatedData._validation = {
       real_metrics_count: realDataCount,
       validated_at: new Date().toISOString(),
@@ -299,9 +282,7 @@ class ApiService {
     return validatedData;
   }
 
-  // Enhanced syncHealthData with real device validation
   async syncHealthData(healthData) {
-    // Don't try if logging out
     if (this.isLoggingOut) {
       console.log('👤 Skipping syncHealthData during logout');
       return { success: false, message: 'Logging out' };
@@ -315,7 +296,6 @@ class ApiService {
         throw new Error('No authentication token available. Please login again.');
       }
 
-      // CRITICAL: Validate this is real device data
       if (!this.validateHealthDataPayload(healthData)) {
         throw new Error('Invalid health data payload. Only real device data is accepted.');
       }
@@ -344,7 +324,6 @@ class ApiService {
         
         console.error('❌ Sync failed:', response.status, errorData);
         
-        // Don't throw auth errors during logout
         if (this.isLoggingOut) {
           console.log('👤 Sync failed during logout (expected)');
           return { success: false, message: 'Logged out' };
@@ -361,7 +340,6 @@ class ApiService {
     } catch (error) {
       console.error('❌ Sync REAL health data error:', error);
       
-      // Don't throw during logout
       if (this.isLoggingOut) {
         console.log('👤 syncHealthData error during logout (expected)');
         return { success: false, message: 'Logged out' };
@@ -371,7 +349,6 @@ class ApiService {
     }
   }
 
-  // Validate health data payload for real device data only
   validateHealthDataPayload(healthData) {
     if (!healthData || typeof healthData !== 'object') {
       console.error('❌ Invalid health data payload structure');
@@ -383,7 +360,6 @@ class ApiService {
       return false;
     }
 
-    // Check for real data markers
     const data = healthData.data;
     
     if (!data.isRealData) {
@@ -396,14 +372,12 @@ class ApiService {
       return false;
     }
 
-    // Validate device type
     const deviceType = healthData.device_type;
     if (!deviceType || !this.isValidRealDeviceType(deviceType)) {
       console.error('❌ Invalid or unsupported device type:', deviceType);
       return false;
     }
 
-    // Validate device ID format
     const deviceId = healthData.device_id;
     if (!deviceId || deviceId === 'unknown' || deviceId.length < 6) {
       console.error('❌ Invalid device ID:', deviceId);
@@ -414,7 +388,6 @@ class ApiService {
     return true;
   }
 
-  // Check if device type is a valid real device
   isValidRealDeviceType(deviceType) {
     const validRealDevices = [
       'et475', 'et-475', 'et_475',
@@ -426,7 +399,6 @@ class ApiService {
     return validRealDevices.includes(deviceType.toLowerCase());
   }
 
-  // Enhanced device connection with real device validation
   async connectSmartwatch(deviceInfo) {
     if (this.isLoggingOut) {
       console.log('👤 Skipping connectSmartwatch during logout');
@@ -436,7 +408,6 @@ class ApiService {
     try {
       console.log('📱 Connecting real smartwatch:', deviceInfo);
       
-      // Validate this is a real device
       if (!this.validateRealDeviceInfo(deviceInfo)) {
         throw new Error('Device validation failed. Only real ET475 and compatible devices are supported.');
       }
@@ -456,12 +427,10 @@ class ApiService {
         const result = await response.json();
         console.log('✅ Real device connected:', result);
         
-        // Track real device connection
         this.setRealDeviceConnected(true, deviceInfo);
         
         return result;
       } else {
-        // Handle auth errors during logout
         if (this.isLoggingOut || response.status === 401) {
           console.log('👤 connectSmartwatch failed during logout (expected)');
           return { success: false, message: 'Not authenticated' };
@@ -479,14 +448,12 @@ class ApiService {
     }
   }
 
-  // Validate real device information
   validateRealDeviceInfo(deviceInfo) {
     if (!deviceInfo || typeof deviceInfo !== 'object') {
       console.error('❌ Invalid device info structure');
       return false;
     }
 
-    // Check required fields
     if (!deviceInfo.device_name || deviceInfo.device_name.trim() === '') {
       console.error('❌ Device name is required');
       return false;
@@ -502,7 +469,6 @@ class ApiService {
       return false;
     }
 
-    // Validate device name patterns for real devices
     const deviceName = deviceInfo.device_name.toLowerCase();
     const validNamePatterns = [
       'et475', 'et-475', 'et 475',
@@ -537,7 +503,6 @@ class ApiService {
       if (response.ok) {
         const data = await response.json();
         
-        // Only return if it's a real device
         if (data.connected && this.validateConnectedDeviceResponse(data)) {
           return { devices: [data] };
         } else {
@@ -545,7 +510,6 @@ class ApiService {
           return { devices: [] };
         }
       } else {
-        // Return empty during logout/auth errors
         if (this.isLoggingOut || response.status === 401) {
           console.log('👤 getConnectedDevices failed during logout (expected)');
         }
@@ -557,19 +521,16 @@ class ApiService {
     }
   }
 
-  // Validate connected device response
   validateConnectedDeviceResponse(deviceData) {
     if (!deviceData || typeof deviceData !== 'object') {
       return false;
     }
 
-    // Check if device type is valid
     if (!deviceData.device_type || !this.isValidRealDeviceType(deviceData.device_type)) {
       console.warn('⚠️ Connected device has invalid type:', deviceData.device_type);
       return false;
     }
 
-    // Check if device name is valid
     if (!deviceData.device_name) {
       console.warn('⚠️ Connected device has no name');
       return false;
@@ -595,7 +556,6 @@ class ApiService {
       if (response.ok) {
         const result = await response.json();
         
-        // Clear real device connection tracking
         this.setRealDeviceConnected(false, null);
         
         return result;
@@ -617,7 +577,6 @@ class ApiService {
     }
   }
 
-  // Chat API with real health data context validation
   async sendChatMessage(message) {
     if (this.isLoggingOut) {
       console.log('👤 Skipping sendChatMessage during logout');
@@ -644,7 +603,6 @@ class ApiService {
       if (response.ok) {
         const result = await response.json();
         
-        // Add context about real data availability
         if (result.success && result.assistant_response) {
           const hasRealData = result.health_context_used === true;
           if (hasRealData) {
@@ -685,7 +643,6 @@ class ApiService {
     }
   }
 
-  // Enhanced health insights with real data validation
   async getChronicConditions() {
     if (this.isLoggingOut || !this.authToken) {
       console.log('👤 Skipping getChronicConditions (logout or no auth)');
@@ -703,7 +660,6 @@ class ApiService {
         const data = await response.json();
         const conditions = data.conditions || [];
         
-        // Filter to only return conditions based on real data
         const realConditions = conditions.filter(condition => 
           condition.data_source === 'real_device'
         );
@@ -739,7 +695,6 @@ class ApiService {
         const data = await response.json();
         let observations = data.observations || "No observations available";
         
-        // Add real data context
         if (observations && !observations.includes("real data") && !observations.includes("Real data")) {
           if (this.realDeviceConnected) {
             observations += " (Connect your ET475 for real-time insights)";
@@ -779,7 +734,6 @@ class ApiService {
         const data = await response.json();
         let recommendations = data.recommendations || "No recommendations available";
         
-        // Add real data context
         if (recommendations && !recommendations.includes("real data") && !recommendations.includes("Real data")) {
           if (this.realDeviceConnected) {
             recommendations += " (Based on your real device data when available)";
@@ -819,7 +773,6 @@ class ApiService {
         const data = await response.json();
         let advice = data.advice || 'Keep maintaining a healthy lifestyle.';
         
-        // Add real data context
         if (advice && !advice.includes("real data") && !advice.includes("Real data")) {
           if (this.realDeviceConnected) {
             advice += " (Personalized advice will improve with more real device data)";
@@ -842,7 +795,6 @@ class ApiService {
     }
   }
 
-  // Utility method to check backend connection
   async checkConnection() {
     try {
       const response = await fetch(`${this.baseURL}/health`, { 
@@ -856,7 +808,6 @@ class ApiService {
     }
   }
 
-  // Get real device status
   getRealDeviceStatus() {
     return {
       connected: this.realDeviceConnected,

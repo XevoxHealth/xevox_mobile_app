@@ -1,4 +1,3 @@
-// Fixed HealthDashboard.tsx - Real Device Data Only, No Demo Data
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -188,7 +187,7 @@ const MetricCard = ({ metric, data, onPress, isUserAuthenticated }) => {
         {getDisplayValue()}
       </Text>
       <Text style={styles.metricUnit}>
-        {realDataExists ? metric.unit : (data.is_real ? 'Device connected' : 'Connect ET475')}
+        {realDataExists ? metric.unit : (data.is_real ? 'Device connected' : 'Connect device')}
       </Text>
       
       {realDataExists && data.values && data.values.length > 1 && (
@@ -360,7 +359,7 @@ export const HealthDashboard = () => {
     if (!data.is_real) {
       Alert.alert(
         'Real Device Required',
-        `${metric.label} data is not available.\n\nConnect your ET475 or compatible smartwatch to start tracking real ${metric.label.toLowerCase()} measurements.`,
+        `${metric.label} data is not available.\n\nConnect your health monitoring device to start tracking real ${metric.label.toLowerCase()} measurements.`,
         [{ text: 'OK' }]
       );
       return;
@@ -435,7 +434,7 @@ export const HealthDashboard = () => {
     }
 
     if (!realDataAvailable) {
-      return { status: 'No Real Device', color: '#EF4444', message: 'Connect ET475 or compatible device' };
+      return { status: 'No Real Device', color: '#EF4444', message: 'Connect compatible device' };
     }
 
     const realMetricsWithData = healthMetrics.filter(metric => {
@@ -479,7 +478,7 @@ export const HealthDashboard = () => {
       <View style={styles.centerContainer}>
         <Icon name="person" size={64} color="#9CA3AF" />
         <Text style={styles.errorText}>Please log in to view your health data</Text>
-        <Text style={styles.errorSubtext}>Connect your account to access real health insights from your ET475 device</Text>
+        <Text style={styles.errorSubtext}>Connect your account to access real health insights from your device</Text>
       </View>
     );
   }
@@ -589,7 +588,7 @@ export const HealthDashboard = () => {
             <View style={styles.noRealDataNotice}>
               <Icon name="warning" size={20} color="#F59E0B" />
               <Text style={styles.noRealDataText}>
-                Connect your ET475 or compatible smartwatch to see real health data. Demo data is not supported.
+                Connect your health monitoring device to see real health data. Demo data is not supported.
               </Text>
             </View>
           )}
@@ -618,8 +617,8 @@ export const HealthDashboard = () => {
           <Icon name="info" size={16} color="#6B7280" />
           <Text style={styles.dataSourceText}>
             {realDataAvailable 
-              ? `✓ Real data from your connected ET475 or compatible device${lastSyncTime ? `\nLast sync: ${new Date(lastSyncTime).toLocaleString()}` : '\nLive synchronization active'}`
-              : 'Connect your real ET475 or compatible smartwatch to view live health data. Demo data is not supported in this app.'
+              ? `✓ Real data from your connected device${lastSyncTime ? `\nLast sync: ${new Date(lastSyncTime).toLocaleString()}` : '\nLive synchronization active'}`
+              : 'Connect your real health monitoring device to view live health data. Demo data is not supported in this app.'
             }
           </Text>
         </View>

@@ -13,9 +13,12 @@ import {
   Dimensions
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from './context';
 
-// Simple fallback icons (will work on web)
-export const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
+const { width, height } = Dimensions.get('window');
+
+// Simple fallback icons
+const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
   <View style={[{
     width: size,
     height: size,
@@ -34,7 +37,7 @@ export const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
 );
 
 // Simple gradient fallback
-export const LinearGradient = ({ colors, children, style, ...props }) => (
+const LinearGradient = ({ colors, children, style, ...props }) => (
   <View style={[style, { 
     backgroundColor: colors?.[0] || '#667eea',
     ...(Platform.OS === 'web' ? {
@@ -44,31 +47,6 @@ export const LinearGradient = ({ colors, children, style, ...props }) => (
     {children}
   </View>
 );
-
-// Import the real auth context
-let useAuth;
-try {
-  useAuth = require('./context').useAuth;
-} catch (e) {
-  console.error('Failed to import useAuth:', e);
-  // Fallback
-  useAuth = () => ({
-    authState: { user: { name: 'Demo User' } },
-    signIn: async (email, password) => {
-      console.log('Fallback signIn called');
-      return { success: true };
-    },
-    signUp: async (userData) => {
-      console.log('Fallback signUp called');
-      return { success: true };
-    },
-    signOut: () => {
-      Alert.alert('Signed Out', 'You have been signed out successfully');
-    }
-  });
-}
-
-const { width, height } = Dimensions.get('window');
 
 // ================== Welcome Screen ==================
 export const WelcomeScreen = () => {
@@ -83,6 +61,7 @@ export const WelcomeScreen = () => {
         <View style={styles.welcomeContent}>
           <View style={styles.logoContainer}>
             <Text style={styles.welcomeLogoText}>XEVOX</Text>
+            <Text style={styles.welcomeSubtext}>Health Monitoring</Text>
           </View>
           
           <View style={styles.featuresList}>
@@ -103,20 +82,14 @@ export const WelcomeScreen = () => {
           <View style={styles.welcomeButtons}>
             <TouchableOpacity 
               style={styles.primaryButton}
-              onPress={() => {
-                console.log('Get Started button pressed');
-                navigation.navigate('Register');
-              }}
+              onPress={() => navigation.navigate('Register')}
             >
               <Text style={styles.primaryButtonText}>Get Started</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.secondaryButton}
-              onPress={() => {
-                console.log('Sign In button pressed');
-                navigation.navigate('Login');
-              }}
+              onPress={() => navigation.navigate('Login')}
             >
               <Text style={styles.secondaryButtonText}>Sign In</Text>
             </TouchableOpacity>
@@ -138,34 +111,32 @@ export const LoginScreen = () => {
   const { signIn } = useAuth();
 
   const handleLogin = async () => {
-    console.log('Login button clicked');
-    console.log('Email:', email);
-    console.log('Password length:', password.length);
+    console.log('Login attempt:', email);
 
     if (!email || !password) {
       setErrorMessage('Please enter both email and password');
       return;
     }
 
+    if (!email.includes('@')) {
+      setErrorMessage('Please enter a valid email address');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage('');
-    console.log('Starting login process...');
 
     try {
       const result = await signIn(email, password);
-      console.log('Login result:', result);
       
       if (!result.success) {
         setErrorMessage(result.message || 'Login failed');
-      } else {
-        console.log('Login successful!');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setErrorMessage('An error occurred during login: ' + error.message);
+      setErrorMessage('An error occurred during login. Please try again.');
     } finally {
       setIsLoading(false);
-      console.log('Login process completed');
     }
   };
 
@@ -205,6 +176,7 @@ export const LoginScreen = () => {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
@@ -217,11 +189,12 @@ export const LoginScreen = () => {
                 onChangeText={setPassword}
                 secureTextEntry
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
             <TouchableOpacity 
-              style={styles.modernButton}
+              style={[styles.modernButton, isLoading && styles.modernButtonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
             >
@@ -232,7 +205,10 @@ export const LoginScreen = () => {
               )}
             </TouchableOpacity>
             
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Register')}
+              disabled={isLoading}
+            >
               <Text style={styles.linkText}>
                 Don't have an account? <Text style={styles.linkTextBold}>Sign Up</Text>
               </Text>
@@ -259,53 +235,50 @@ export const RegisterScreen = () => {
   const { signUp } = useAuth();
 
   const handleRegister = async () => {
-    console.log('=== REGISTER DEBUG ===');
-    console.log('Register button clicked');
-    console.log('Form data:', {
-      name: formData.name,
-      email: formData.email,
-      passwordLength: formData.password.length,
-      confirmPasswordLength: formData.confirmPassword.length
-    });
+    console.log('Register attempt:', formData.email);
 
+    // Validation
     if (!formData.name || !formData.email || !formData.password) {
-      const error = 'Please fill in all fields';
-      console.log('Validation error:', error);
-      setErrorMessage(error);
+      setErrorMessage('Please fill in all fields');
+      return;
+    }
+
+    if (!formData.email.includes('@')) {
+      setErrorMessage('Please enter a valid email address');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      const error = 'Passwords do not match';
-      console.log('Password mismatch error');
-      setErrorMessage(error);
+      setErrorMessage('Passwords do not match');
       return;
     }
 
     setIsLoading(true);
     setErrorMessage('');
-    console.log('Starting registration process...');
 
     try {
-      console.log('Calling signUp function...');
       const result = await signUp(formData);
-      console.log('Registration result:', result);
       
       if (!result.success) {
-        console.log('Registration failed:', result.message);
         setErrorMessage(result.message || 'Registration failed');
       } else {
-        console.log('Registration successful!');
-        // Show success message
         Alert.alert('Success', 'Account created successfully!');
       }
     } catch (error) {
       console.error('Registration error:', error);
-      setErrorMessage('An error occurred during registration: ' + error.message);
+      setErrorMessage('An error occurred during registration. Please try again.');
     } finally {
       setIsLoading(false);
-      console.log('Registration process completed');
     }
+  };
+
+  const updateFormData = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -340,11 +313,9 @@ export const RegisterScreen = () => {
                 style={styles.modernInput}
                 placeholder="Full Name"
                 value={formData.name}
-                onChangeText={(text) => {
-                  console.log('Name changed:', text);
-                  setFormData({...formData, name: text});
-                }}
+                onChangeText={(text) => updateFormData('name', text)}
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
@@ -354,13 +325,11 @@ export const RegisterScreen = () => {
                 style={styles.modernInput}
                 placeholder="Email address"
                 value={formData.email}
-                onChangeText={(text) => {
-                  console.log('Email changed:', text);
-                  setFormData({...formData, email: text});
-                }}
+                onChangeText={(text) => updateFormData('email', text)}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
@@ -370,12 +339,10 @@ export const RegisterScreen = () => {
                 style={styles.modernInput}
                 placeholder="Password"
                 value={formData.password}
-                onChangeText={(text) => {
-                  console.log('Password changed, length:', text.length);
-                  setFormData({...formData, password: text});
-                }}
+                onChangeText={(text) => updateFormData('password', text)}
                 secureTextEntry
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
@@ -385,12 +352,10 @@ export const RegisterScreen = () => {
                 style={styles.modernInput}
                 placeholder="Confirm Password"
                 value={formData.confirmPassword}
-                onChangeText={(text) => {
-                  console.log('Confirm password changed, length:', text.length);
-                  setFormData({...formData, confirmPassword: text});
-                }}
+                onChangeText={(text) => updateFormData('confirmPassword', text)}
                 secureTextEntry
                 placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
               />
             </View>
             
@@ -406,7 +371,10 @@ export const RegisterScreen = () => {
               )}
             </TouchableOpacity>
             
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Login')}
+              disabled={isLoading}
+            >
               <Text style={styles.linkText}>
                 Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
               </Text>
@@ -542,6 +510,7 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginLeft: 8,
     fontSize: 14,
+    flex: 1,
   },
   inputGroup: {
     flexDirection: 'row',

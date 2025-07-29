@@ -138,7 +138,7 @@ const ChronicConditionCard = ({ condition, onPress }) => {
         styles.conditionDescription,
         !isRealData && styles.conditionDescriptionDisabled
       ]}>
-        {isRealData ? description : 'Connect your ET475 to monitor this condition with real data'}
+        {isRealData ? description : 'Connect your device to monitor this condition with real data'}
       </Text>
 
       {isRealData && keyMetrics && keyMetrics.length > 0 && (
@@ -192,7 +192,7 @@ const ChronicConditionCard = ({ condition, onPress }) => {
           <Icon name="warning" size={32} color="#F59E0B" />
           <Text style={styles.noRealDataTitle}>Real Device Required</Text>
           <Text style={styles.noRealDataText}>
-            Connect your ET475 or compatible smartwatch to monitor {name.toLowerCase()} with real health measurements.
+            Connect your health monitoring device to monitor {name.toLowerCase()} with real health measurements.
           </Text>
         </View>
       )}
@@ -302,7 +302,7 @@ export const ChronicMonitorsScreen = () => {
         }
       ] : [],
       recommendations: cvdRisk?.recommendations || [
-        'Connect your ET475 to monitor cardiovascular health',
+        'Connect your device to monitor cardiovascular health',
         'Regular heart rate and blood pressure tracking needed'
       ]
     });
@@ -340,7 +340,7 @@ export const ChronicMonitorsScreen = () => {
         }
       ] : [],
       recommendations: diabetesRisk?.recommendations || [
-        'Connect your ET475 to track blood glucose levels',
+        'Connect your device to track blood glucose levels',
         'Activity monitoring needed for diabetes prevention'
       ]
     });
@@ -388,7 +388,7 @@ export const ChronicMonitorsScreen = () => {
         }
       ] : [],
       recommendations: hypertensionRisk?.recommendations || [
-        'Connect your ET475 to monitor blood pressure',
+        'Connect your device to monitor blood pressure',
         'Real-time stress tracking needed'
       ]
     });
@@ -426,7 +426,7 @@ export const ChronicMonitorsScreen = () => {
         }
       ] : [],
       recommendations: respiratoryRisk?.recommendations || [
-        'Connect your ET475 to monitor oxygen saturation',
+        'Connect your device to monitor oxygen saturation',
         'Real respiratory data needed for assessment'
       ]
     });
@@ -471,7 +471,7 @@ export const ChronicMonitorsScreen = () => {
         }
       ] : [],
       recommendations: metabolicRisk?.recommendations || [
-        'Connect your ET475 to track daily activity',
+        'Connect your device to track daily activity',
         'Real calorie and step data needed for assessment'
       ]
     });
@@ -493,7 +493,7 @@ export const ChronicMonitorsScreen = () => {
       level,
       recommendations: [
         'Regular cardiovascular exercise (30 min/day) - tracked by your device',
-        'Monitor blood pressure daily with your ET475',
+        'Monitor blood pressure daily with your device',
         'Maintain a low-sodium diet',
         'Continue real-time heart rate monitoring',
         'Get adequate sleep (7-9 hours) - track with device',
@@ -518,7 +518,7 @@ export const ChronicMonitorsScreen = () => {
         'Follow a balanced, low-sugar diet',
         'Exercise regularly - track progress with your device',
         'Maintain a healthy weight',
-        'Continue activity tracking with ET475',
+        'Continue activity tracking with your device',
         'Use device data to correlate activity with glucose levels'
       ]
     };
@@ -540,7 +540,7 @@ export const ChronicMonitorsScreen = () => {
       recommendations: [
         'Monitor blood pressure twice daily with your device',
         'Use device stress tracking to identify triggers',
-        'Maintain regular sleep schedule - track with ET475',
+        'Maintain regular sleep schedule - track with device',
         'Exercise regularly but monitor heart rate',
         'Limit alcohol consumption',
         'Track correlations between stress and blood pressure'
@@ -581,7 +581,7 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
-        'Aim for 10,000 steps daily - track with your ET475',
+        'Aim for 10,000 steps daily - track with your device',
         'Follow a balanced Mediterranean diet',
         'Include strength training 2-3x/week',
         'Monitor daily calorie burn with device',
@@ -595,13 +595,13 @@ export const ChronicMonitorsScreen = () => {
     if (!condition.isRealData) {
       Alert.alert(
         'Real Device Required',
-        `To monitor ${condition.name}, you need to connect your ET475 or compatible smartwatch.\n\nReal health measurements are required for accurate chronic condition monitoring.`,
+        `To monitor ${condition.name}, you need to connect your health monitoring device.\n\nReal health measurements are required for accurate chronic condition monitoring.`,
         [
           { text: 'OK' },
           { text: 'Learn More', onPress: () => {
             Alert.alert(
               'Why Real Data Matters',
-              'Chronic condition monitoring requires accurate, real-time health measurements from your actual device. Demo data cannot provide the precision needed for health analysis.\n\nConnect your ET475 to get:\n• Real heart rate monitoring\n• Actual blood pressure readings\n• True activity levels\n• Accurate sleep data',
+              'Chronic condition monitoring requires accurate, real-time health measurements from your actual device. Demo data cannot provide the precision needed for health analysis.\n\nConnect your device to get:\n• Real heart rate monitoring\n• Actual blood pressure readings\n• True activity levels\n• Accurate sleep data',
               [{ text: 'Understood' }]
             );
           }}
@@ -618,9 +618,9 @@ export const ChronicMonitorsScreen = () => {
   const renderNoDeviceState = () => (
     <View style={styles.noDeviceContainer}>
       <Icon name="watch" size={64} color="#9CA3AF" />
-      <Text style={styles.noDeviceTitle}>Connect Your Real ET475 Device</Text>
+      <Text style={styles.noDeviceTitle}>Connect Your Real Device</Text>
       <Text style={styles.noDeviceDescription}>
-        Connect your ET475 or compatible smartwatch to monitor chronic conditions with real health data. Demo data is not supported for medical monitoring.
+        Connect your health monitoring device to monitor chronic conditions with real health data. Demo data is not supported for medical monitoring.
       </Text>
       <View style={styles.benefitsList}>
         <Text style={styles.benefitsTitle}>Real Device Benefits:</Text>
@@ -631,7 +631,7 @@ export const ChronicMonitorsScreen = () => {
       </View>
       <TouchableOpacity 
         style={styles.connectDeviceButton}
-        onPress={() => Alert.alert('Connect Device', 'Go to the Home screen to connect your real ET475 or compatible smartwatch')}
+        onPress={() => Alert.alert('Connect Device', 'Go to the Home screen to connect your real health monitoring device')}
       >
         <Icon name="bluetooth" size={20} color="#FFFFFF" />
         <Text style={styles.connectDeviceText}>Connect Real Device</Text>
@@ -709,7 +709,7 @@ export const ChronicMonitorsScreen = () => {
           <Text style={styles.summaryText}>
             {realDataAvailable 
               ? `Monitoring 5 key chronic conditions based on your real health metrics from your connected device. ${realConditionsCount} conditions have real data available.`
-              : 'Your device is connected but waiting for real health data. Make sure your ET475 is actively collecting measurements.'
+              : 'Your device is connected but waiting for real health data. Make sure your device is actively collecting measurements.'
             }
           </Text>
           <Text style={styles.lastUpdated}>
@@ -739,7 +739,7 @@ export const ChronicMonitorsScreen = () => {
         <View style={styles.disclaimerCard}>
           <Icon name="information" size={20} color="#6B7280" />
           <Text style={styles.disclaimerText}>
-            This analysis is based on real health data from your connected ET475 device and general health guidelines. 
+            This analysis is based on real health data from your connected device and general health guidelines. 
             Always consult with healthcare professionals for medical advice and diagnosis. Demo data is not used in this analysis.
           </Text>
         </View>

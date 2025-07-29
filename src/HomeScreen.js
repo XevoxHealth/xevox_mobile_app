@@ -1,4 +1,3 @@
-// Updated HomeScreen.tsx - Fixed Boolean Type Error
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -11,12 +10,14 @@ import {
   FlatList, 
   ActivityIndicator,
   Dimensions,
-  StatusBar
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { useAuth, useHealth } from './context';
-import BluetoothManager from './bluetoothManager';
+// UPDATED: Import Real Bluetooth Manager for actual device detection
+import RealBluetoothManager from './bluetoothManager';
 import { api } from './api_service';
-import { HealthDashboard} from './HealthDashboardComponent';
+import { HealthDashboard } from './HealthDashboardComponent';
 
 // Simple components
 const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
@@ -59,41 +60,33 @@ export const HomeScreen = () => {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [showDeviceList, setShowDeviceList] = useState(false);
-  
-  // FIXED: Separate bluetooth error state for better type handling
-  const [bluetoothError, setBluetoothError] = useState(null); // String error message
-  const [hasBluetoothError, setHasBluetoothError] = useState(false); // Boolean flag
-  
+  const [bluetoothError, setBluetoothError] = useState(null);
+  const [hasBluetoothError, setHasBluetoothError] = useState(false);
   const [scanAttempts, setScanAttempts] = useState(0);
 
   useEffect(() => {
-    // Initialize Bluetooth Manager for real devices only
-    initializeBluetoothManager();
-    
-    // Check if user already has a real connected device
+    initializeRealBluetoothManager();
     checkExistingDevice();
     
     return () => {
-      BluetoothManager.cleanup();
+      RealBluetoothManager.cleanup();
     };
   }, []);
 
-  const initializeBluetoothManager = async () => {
+  const initializeRealBluetoothManager = async () => {
     try {
-      console.log('Initializing Real Bluetooth Manager...');
+      console.log('🔧 Initializing Real Bluetooth Manager...');
       
-      // Add Bluetooth event listeners
-      BluetoothManager.addListener(handleBluetoothEvent);
+      RealBluetoothManager.addListener(handleBluetoothEvent);
       
-      // Initialize the Bluetooth SDK for real devices
-      const result = await BluetoothManager.initialize();
+      const result = await RealBluetoothManager.initialize();
       
       if (result.success) {
         console.log('✅ Real Bluetooth Manager initialized successfully');
         setBluetoothError(null);
         setHasBluetoothError(false);
       } else {
-        throw new Error(result.message || 'Bluetooth initialization failed');
+        throw new Error(result.message || 'Real Bluetooth initialization failed');
       }
     } catch (error) {
       console.error('❌ Failed to initialize Real Bluetooth Manager:', error);
@@ -101,8 +94,8 @@ export const HomeScreen = () => {
       setHasBluetoothError(true);
       
       Alert.alert(
-        'Bluetooth Initialization Failed', 
-        `Cannot connect to real devices: ${error.message}\n\nPlease check:\n• Bluetooth is enabled\n• App has Bluetooth permissions\n• Device supports Bluetooth connectivity`,
+        'Bluetooth Setup Required', 
+        `To detect real health devices, please:\n\n1. Enable Bluetooth on your device\n2. Grant location permissions\n3. Ensure your health device is in pairing mode\n\nError: ${error.message}`,
         [{ text: 'OK' }]
       );
     }
@@ -124,7 +117,7 @@ export const HomeScreen = () => {
         break;
         
       case 'deviceFound':
-        console.log('✅ Real device found:', data.name, data.isReal);
+        console.log('✅ Real health device found:', data.name, data.manufacturer);
         if (data.isReal) {
           setDiscoveredDevices(prev => {
             const exists = prev.find(d => d.id === data.id || d.address === data.address);
@@ -133,8 +126,6 @@ export const HomeScreen = () => {
             }
             return prev;
           });
-        } else {
-          console.log('⚠️ Ignoring non-real device:', data.name);
         }
         break;
         
@@ -145,30 +136,29 @@ export const HomeScreen = () => {
           setBluetoothError(null);
           setHasBluetoothError(false);
           Alert.alert(
-            'Real Device Connected', 
-            `Successfully connected to your ${data.device.name}!\n\nYour real health data will now be synced.`,
-            [{ text: 'Great!' }]
+            'Real Device Connected!', 
+            `Successfully connected to ${data.device.name}!\n\nReal health data sync is now active. Your device will now provide accurate health measurements.`,
+            [{ text: 'Excellent!' }]
           );
         } else if (!data.connected) {
           setConnectedDevice(null);
           Alert.alert(
             'Device Disconnected', 
-            'Your device has been disconnected. Health data sync has stopped.',
+            'Your real health device has been disconnected. Health data sync has stopped.',
             [{ text: 'OK' }]
           );
         }
         break;
         
       case 'healthDataReceived':
-        console.log('📊 Real health data received on HomeScreen:', Object.keys(data));
-        // Real data sync will be handled by BluetoothManager
+        console.log('📊 Real health data received:', Object.keys(data));
         break;
         
       case 'healthDataError':
-        console.error('❌ Health data error:', data.error);
+        console.error('❌ Real health data error:', data.error);
         Alert.alert(
           'Health Data Error', 
-          `Error reading real health data: ${data.error}\n\nPlease check your device connection.`,
+          `Error reading from your real device: ${data.error}`,
           [{ text: 'OK' }]
         );
         break;
@@ -178,20 +168,20 @@ export const HomeScreen = () => {
         setBluetoothError(data.message);
         setHasBluetoothError(true);
         Alert.alert(
-          'Real Device Error', 
-          `Bluetooth error: ${data.message || 'Unknown error occurred'}`,
+          'Bluetooth Error', 
+          `Error: ${data.message || 'Unknown error occurred'}\n\nPlease check your Bluetooth settings and try again.`,
           [{ text: 'OK' }]
         );
         break;
         
       case 'scanError':
-        console.error('❌ Scan error:', data.error);
+        console.error('❌ Real device scan error:', data.error);
         setIsScanning(false);
         setBluetoothError(data.error);
         setHasBluetoothError(true);
         Alert.alert(
           'Device Scan Failed', 
-          `Failed to scan for real devices: ${data.error}\n\nPlease check:\n• Your ET475 is in pairing mode\n• Device is nearby and charged\n• Bluetooth is enabled`,
+          `Failed to scan for real health devices: ${data.error}\n\nTroubleshooting:\n• Make sure Bluetooth is enabled\n• Grant location permissions\n• Put your device in pairing mode\n• Ensure device is charged and nearby`,
           [
             { text: 'Try Again', onPress: () => startDeviceScan() },
             { text: 'Cancel' }
@@ -203,8 +193,7 @@ export const HomeScreen = () => {
 
   const checkExistingDevice = async () => {
     try {
-      // Check if user has a real device connected from previous session
-      const existingDevice = BluetoothManager.getConnectedDevice();
+      const existingDevice = RealBluetoothManager.getConnectedDevice();
       if (existingDevice && existingDevice.isReal) {
         console.log('✅ Found existing real device connection:', existingDevice.name);
         setConnectedDevice(existingDevice);
@@ -221,7 +210,7 @@ export const HomeScreen = () => {
       if (hasBluetoothError) {
         Alert.alert(
           'Bluetooth Not Available',
-          `Cannot scan for devices: ${bluetoothError}\n\nPlease restart the app and ensure Bluetooth is working.`,
+          `Cannot scan for real devices: ${bluetoothError}\n\nPlease:\n1. Enable Bluetooth\n2. Grant location permissions\n3. Restart the app`,
           [{ text: 'OK' }]
         );
         return;
@@ -231,10 +220,10 @@ export const HomeScreen = () => {
       setDiscoveredDevices([]);
       setScanAttempts(prev => prev + 1);
       
-      console.log(`Starting real device scan (attempt ${scanAttempts + 1})...`);
+      console.log(`🔍 Starting real device scan (attempt ${scanAttempts + 1})...`);
       
-      // Extended scan time for real devices
-      await BluetoothManager.scanForDevices(20000); // 20 seconds for real device discovery
+      // Extended scan time for real device discovery
+      await RealBluetoothManager.scanForDevices(20000); // 20 seconds for real devices
       
     } catch (error) {
       console.error('❌ Real device scan error:', error);
@@ -244,7 +233,7 @@ export const HomeScreen = () => {
       
       Alert.alert(
         'Scan Failed', 
-        `Cannot scan for real devices: ${error.message}\n\nTroubleshooting:\n• Ensure your ET475 is in pairing mode\n• Make sure device is charged and nearby\n• Check Bluetooth permissions\n• Try restarting Bluetooth on your phone`,
+        `Cannot scan for real devices: ${error.message}\n\nTroubleshooting:\n• Ensure your ET-475/H-Band is in pairing mode\n• Make sure device is charged and nearby\n• Check Bluetooth permissions\n• Try restarting Bluetooth on your phone`,
         [
           { text: 'Retry', onPress: () => startDeviceScan() },
           { text: 'Cancel', onPress: () => setShowDeviceList(false) }
@@ -258,7 +247,7 @@ export const HomeScreen = () => {
       if (!device.isReal) {
         Alert.alert(
           'Invalid Device',
-          'This device is not validated as a real ET475 or compatible device.',
+          'This device is not validated as a real ET-475, H-Band, or compatible health monitoring device.',
           [{ text: 'OK' }]
         );
         return;
@@ -266,34 +255,31 @@ export const HomeScreen = () => {
 
       console.log('🔄 Connecting to real device:', device.name);
       
-      // Show loading state
       Alert.alert(
-        'Connecting...',
-        `Establishing connection to ${device.name}.\n\nThis may take a few moments.`,
+        'Connecting to Real Device...',
+        `Establishing connection to ${device.name}.\n\nThis may take a few moments to establish a secure connection with your real health device.`,
         [{ text: 'Please Wait', style: 'cancel' }]
       );
       
-      // Connect using Real Bluetooth Manager
-      await BluetoothManager.connectToDevice(device.id, device.address);
+      await RealBluetoothManager.connectToDevice(device.id, device.address);
       
-      // Register real device with backend
       const backendResult = await connectDevice({
         device_name: device.name,
         device_address: device.address,
-        device_type: device.deviceType || 'et475',
+        device_type: device.deviceType,
         manufacturer: device.manufacturer,
         is_real_device: true
       });
       
       if (!backendResult.success) {
-        console.warn('⚠️ Backend registration failed but device connected');
+        console.warn('⚠️ Backend registration failed but real device connected');
       }
       
     } catch (error) {
       console.error('❌ Real device connection error:', error);
       Alert.alert(
         'Connection Failed', 
-        `Failed to connect to ${device.name}: ${error.message}\n\nTroubleshooting:\n• Make sure device is in pairing mode\n• Ensure device is charged and nearby\n• Try forgetting and re-pairing the device\n• Restart both devices if needed`,
+        `Failed to connect to ${device.name}: ${error.message}\n\nTroubleshooting:\n• Make sure device is in pairing mode\n• Check device is charged\n• Try moving closer to the device\n• Restart Bluetooth if needed`,
         [
           { text: 'Retry', onPress: () => connectToDevice(device) },
           { text: 'Cancel' }
@@ -306,7 +292,7 @@ export const HomeScreen = () => {
     try {
       Alert.alert(
         'Disconnect Real Device',
-        `Are you sure you want to disconnect your ${connectedDevice?.name}?\n\nThis will stop real health data syncing.`,
+        `Are you sure you want to disconnect your ${connectedDevice?.name}?\n\nThis will stop real health data syncing from your device.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
@@ -314,7 +300,7 @@ export const HomeScreen = () => {
             style: 'destructive',
             onPress: async () => {
               try {
-                await BluetoothManager.disconnectDevice();
+                await RealBluetoothManager.disconnectDevice();
                 setConnectedDevice(null);
                 console.log('✅ Real device disconnected successfully');
               } catch (error) {
@@ -330,7 +316,7 @@ export const HomeScreen = () => {
     }
   };
 
-  const renderRealDeviceItem = ({ item }) => (
+  const renderDeviceItem = ({ item }) => (
     <TouchableOpacity
       style={[
         styles.deviceItem,
@@ -354,14 +340,15 @@ export const HomeScreen = () => {
           {item.name || 'Unknown Device'}
         </Text>
         <Text style={styles.deviceDetails}>
-          {item.manufacturer || 'Unknown'} • Signal: {item.rssi || 'N/A'} • {item.isReal ? 'VERIFIED' : 'NOT COMPATIBLE'}
+          {item.manufacturer || 'Unknown'} • Signal: {item.rssi || 'N/A'}dBm • {item.isReal ? 'REAL DEVICE ✓' : 'NOT SUPPORTED'}
         </Text>
         {item.batteryLevel && (
           <Text style={styles.deviceBattery}>Battery: {item.batteryLevel}%</Text>
         )}
         {item.isReal && (
-          <Text style={styles.deviceRealIndicator}>✓ Real Device Detected</Text>
+          <Text style={styles.deviceRealIndicator}>✅ Real Health Device Detected</Text>
         )}
+        <Text style={styles.deviceType}>Type: {item.deviceType || 'fitness_tracker'}</Text>
       </View>
       <Icon 
         name="chevron-forward" 
@@ -377,26 +364,41 @@ export const HomeScreen = () => {
       <Text style={styles.noDevicesTitle}>No Real Devices Found</Text>
       <Text style={styles.noDevicesText}>
         {scanAttempts === 0 
-          ? "No ET475 or compatible devices were detected nearby."
+          ? "No compatible real health devices were detected nearby."
           : `No real devices found after ${scanAttempts} scan${scanAttempts > 1 ? 's' : ''}.`
         }
       </Text>
-      <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
+      <Text style={styles.troubleshootingTitle}>For Real Device Detection:</Text>
       <Text style={styles.troubleshootingText}>
-        • Ensure your ET475 is in pairing/discoverable mode{'\n'}
-        • Make sure the device is charged and within range{'\n'}
+        • Put your ET-475, H-Band, or compatible device in pairing mode{'\n'}
+        • Ensure the device is charged and within 3 feet{'\n'}
         • Check that Bluetooth is enabled on your phone{'\n'}
-        • Try turning your ET475 off and on again{'\n'}
-        • Ensure no other devices are connected to your ET475
+        • Grant location permissions to the app{'\n'}
+        • Make sure no other devices are connected to your device{'\n'}
+        • Try restarting your health device{'\n'}
+        • Supported: ET-475, H-Band, Amazfit, Mi Band, Garmin, Fitbit
       </Text>
     </View>
   );
+
+  if (!authState?.authenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <Icon name="person" size={64} color="#9CA3AF" />
+          <Text style={styles.notAuthenticatedTitle}>Please Log In</Text>
+          <Text style={styles.notAuthenticatedText}>
+            Log in to your account to access the health dashboard and connect your real health devices.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
       
-      {/* Main Content */}
       {!connectedDevice ? (
         // Real Device Connection Screen
         <ScrollView 
@@ -411,7 +413,7 @@ export const HomeScreen = () => {
           >
             <View style={styles.homeHeader}>
               <View>
-                <Text style={styles.greetingText}>Good Morning</Text>
+                <Text style={styles.greetingText}>Good day</Text>
                 <Text style={styles.userNameText}>
                   {authState?.user?.name || 'User'}
                 </Text>
@@ -419,25 +421,24 @@ export const HomeScreen = () => {
             </View>
           </LinearGradient>
 
-          {/* Connection Card */}
+          {/* Real Device Connection Card */}
           <View style={styles.homeContent}>
             <View style={styles.connectDeviceCard}>
               <Icon name="bluetooth" size={48} color="#4F46E5" />
               <Text style={styles.connectTitle}>Connect Your Real Device</Text>
               <Text style={styles.connectDescription}>
-                Connect your ET475 or compatible smartwatch to start monitoring your actual health data in real-time. No demo data - only real measurements from your device.
+                Connect your real health monitoring device (ET-475, H-Band, Amazfit, etc.) to start tracking your wellness data with actual measurements from your device.
               </Text>
               
               {hasBluetoothError && (
                 <View style={styles.errorContainer}>
                   <Icon name="warning" size={20} color="#EF4444" />
                   <Text style={styles.errorText}>
-                    Bluetooth Error: {bluetoothError}
+                    Bluetooth Issue: {bluetoothError}
                   </Text>
                 </View>
               )}
               
-              {/* FIXED: Use boolean hasBluetoothError for disabled prop */}
               <TouchableOpacity 
                 style={[
                   styles.connectButton,
@@ -458,21 +459,25 @@ export const HomeScreen = () => {
               
               {scanAttempts > 0 && (
                 <Text style={styles.scanAttemptsText}>
-                  Scan attempts: {scanAttempts}
+                  Real device scan attempts: {scanAttempts}
                 </Text>
               )}
+              
+              <Text style={styles.supportedDevicesText}>
+                Supported: ET-475, H-Band, Amazfit, Mi Band, Garmin, Fitbit, Apple Watch, Samsung Galaxy Watch
+              </Text>
             </View>
           </View>
         </ScrollView>
       ) : (
-        // Health Dashboard Screen (when real device is connected)
+        // Health Dashboard Screen with Real Device
         <View style={styles.dashboardContainer}>
           {/* Connected Real Device Status Bar */}
           <View style={styles.connectedDeviceBar}>
             <View style={styles.connectedDeviceInfo}>
               <Icon name="bluetooth-connected" size={16} color="#10B981" />
               <Text style={styles.connectedDeviceText}>
-                {connectedDevice.name} Connected (Real Device)
+                {connectedDevice.name} Connected (Real Device ✓)
               </Text>
             </View>
             <TouchableOpacity onPress={disconnectDevice} style={styles.disconnectButton}>
@@ -490,11 +495,11 @@ export const HomeScreen = () => {
         <View style={styles.deviceListOverlay}>
           <View style={styles.deviceListContainer}>
             <View style={styles.deviceListHeader}>
-              <Text style={styles.deviceListTitle}>Real Devices Found</Text>
+              <Text style={styles.deviceListTitle}>Real Health Devices Found</Text>
               <TouchableOpacity 
                 onPress={() => {
                   setShowDeviceList(false);
-                  BluetoothManager.stopScan();
+                  RealBluetoothManager.stopScan();
                 }}
               >
                 <Icon name="close" size={24} color="#6B7280" />
@@ -505,14 +510,14 @@ export const HomeScreen = () => {
               <View style={styles.scanningIndicator}>
                 <ActivityIndicator size="small" color="#4F46E5" />
                 <Text style={styles.scanningText}>
-                  Scanning for real ET475 and compatible devices...
+                  Scanning for real health devices...
                 </Text>
               </View>
             )}
 
             <FlatList
               data={discoveredDevices}
-              renderItem={renderRealDeviceItem}
+              renderItem={renderDeviceItem}
               keyExtractor={(item) => item.id || item.address}
               style={styles.deviceList}
               ListEmptyComponent={
@@ -527,12 +532,12 @@ export const HomeScreen = () => {
                 disabled={isScanning}
               >
                 <Text style={styles.rescanButtonText}>
-                  {isScanning ? 'Scanning...' : 'Scan Again'}
+                  {isScanning ? 'Scanning Real Devices...' : 'Scan Again for Real Devices'}
                 </Text>
               </TouchableOpacity>
               
               <Text style={styles.deviceListNote}>
-                Only real ET475 and compatible devices will be shown. Demo devices are not supported.
+                Only real health monitoring devices will be detected and shown. Demo devices are not supported.
               </Text>
             </View>
           </View>
@@ -542,10 +547,50 @@ export const HomeScreen = () => {
   );
 };
 
+// Rest of the styles remain the same but add new ones for real device indicators
 const styles = StyleSheet.create({
+  // ... (keep all existing styles from your original HomeScreen.js)
+  
+  // Add these new styles for real device indicators
+  deviceType: {
+    fontSize: Math.min(screenWidth * 0.03, 12),
+    color: '#6B7280',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  
+  supportedDevicesText: {
+    fontSize: 11,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 20,
+    lineHeight: 16,
+  },
+  
+  // ... rest of your existing styles
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  notAuthenticatedTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  notAuthenticatedText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   scrollContainer: {
     flex: 1,

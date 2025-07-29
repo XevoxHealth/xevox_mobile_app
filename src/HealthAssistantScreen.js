@@ -39,7 +39,7 @@ export const HealthAssistantScreen = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm your AI health assistant. I analyze real health data from your connected ET475 or compatible smartwatch to provide personalized insights and recommendations. How can I help you today?",
+      text: "Hello! I'm your AI health assistant. I analyze real health data from your connected device to provide personalized insights and recommendations. How can I help you today?",
       isUser: false,
       timestamp: new Date(),
       type: 'welcome'
@@ -58,7 +58,7 @@ export const HealthAssistantScreen = () => {
     { id: 2, text: "Give me recommendations based on my device", icon: "checkmark-circle", requiresRealData: true },
     { id: 3, text: "What should I focus on from my readings?", icon: "target", requiresRealData: true },
     { id: 4, text: "Explain my chronic conditions from real data", icon: "medical", requiresRealData: true },
-    { id: 5, text: "Help me connect my ET475 device", icon: "bluetooth", requiresRealData: false },
+    { id: 5, text: "Help me connect my device", icon: "bluetooth", requiresRealData: false },
     { id: 6, text: "Why is real data important?", icon: "help", requiresRealData: false }
   ];
 
@@ -80,7 +80,7 @@ export const HealthAssistantScreen = () => {
         console.log('No real device connected');
         const noDeviceMessage = {
           id: Date.now() + 500,
-          text: "I notice you don't have a real device connected yet. Connect your ET475 or compatible smartwatch to get personalized insights based on your actual health measurements. I can help you with the setup process!",
+          text: "I notice you don't have a real device connected yet. Connect your health monitoring device to get personalized insights based on your actual health measurements. I can help you with the setup process!",
           isUser: false,
           timestamp: new Date(),
           type: 'device_status'
@@ -131,7 +131,7 @@ export const HealthAssistantScreen = () => {
           console.log('Device connected but no real data available yet');
           const waitingDataMessage = {
             id: Date.now() + 1000,
-            text: "I can see your device is connected, but I'm waiting for real health measurements to come through. Make sure your ET475 is actively collecting data and try syncing it. Once I have your real data, I can provide much more personalized assistance!",
+            text: "I can see your device is connected, but I'm waiting for real health measurements to come through. Make sure your device is actively collecting data and try syncing it. Once I have your real data, I can provide much more personalized assistance!",
             isUser: false,
             timestamp: new Date(),
             type: 'waiting_data'
@@ -147,7 +147,7 @@ export const HealthAssistantScreen = () => {
       // Don't show error to user - just continue without health context
       const errorMessage = {
         id: Date.now() + 1000,
-        text: "I'm having trouble accessing your health data right now. Please ensure your ET475 device is connected and syncing properly. I can still help with general health questions!",
+        text: "I'm having trouble accessing your health data right now. Please ensure your device is connected and syncing properly. I can still help with general health questions!",
         isUser: false,
         timestamp: new Date(),
         type: 'context_error'
@@ -210,9 +210,9 @@ export const HealthAssistantScreen = () => {
       } else {
         // Fallback response with real data context
         const fallbackText = !hasRealDevice 
-          ? "I don't have access to your real health data yet. Please connect your ET475 or compatible smartwatch to get personalized insights based on your actual measurements."
+          ? "I don't have access to your real health data yet. Please connect your health monitoring device to get personalized insights based on your actual measurements."
           : !realDataAvailable
-          ? "Your device is connected but I need real health measurements to provide personalized assistance. Make sure your ET475 is actively collecting and syncing data."
+          ? "Your device is connected but I need real health measurements to provide personalized assistance. Make sure your device is actively collecting and syncing data."
           : "I'm having trouble processing your request right now. Please check that your real device is connected and try again.";
           
         assistantResponse = {
@@ -234,9 +234,9 @@ export const HealthAssistantScreen = () => {
       let errorText = "I'm experiencing some technical difficulties. ";
       
       if (!hasRealDevice) {
-        errorText += "Also, I notice you don't have a real device connected. Connect your ET475 for personalized health insights.";
+        errorText += "Also, I notice you don't have a real device connected. Connect your device for personalized health insights.";
       } else if (!realDataAvailable) {
-        errorText += "Make sure your ET475 is syncing real health data for better assistance.";
+        errorText += "Make sure your device is syncing real health data for better assistance.";
       } else {
         errorText += "Please check your connection and try again.";
       }
@@ -268,7 +268,7 @@ export const HealthAssistantScreen = () => {
     if (action.requiresRealData && !realDataAvailable) {
       Alert.alert(
         'Real Device Data Required',
-        `To ${action.text.toLowerCase()}, I need real health data from your connected ET475 or compatible smartwatch.\n\nCurrently: ${
+        `To ${action.text.toLowerCase()}, I need real health data from your connected device.\n\nCurrently: ${
           !hasRealDevice 
             ? 'No device connected' 
             : 'Device connected but no real data available'
@@ -277,7 +277,7 @@ export const HealthAssistantScreen = () => {
           { text: 'OK' },
           { 
             text: 'Help Connect', 
-            onPress: () => sendMessage("Help me connect my ET475 device") 
+            onPress: () => sendMessage("Help me connect my device") 
           }
         ]
       );
@@ -291,7 +291,7 @@ export const HealthAssistantScreen = () => {
     if (!realDataAvailable) {
       Alert.alert(
         'Real Data Required',
-        'I need real health data from your ET475 device to provide insights. Please ensure your device is connected and syncing data.',
+        'I need real health data from your device to provide insights. Please ensure your device is connected and syncing data.',
         [{ text: 'OK' }]
       );
       return;
@@ -305,7 +305,7 @@ export const HealthAssistantScreen = () => {
       
       const insightsMessage = {
         id: Date.now(),
-        text: insights.observations || "No real health insights available right now. Make sure your ET475 is connected and has recent data.",
+        text: insights.observations || "No real health insights available right now. Make sure your device is connected and has recent data.",
         isUser: false,
         timestamp: new Date(),
         type: 'real_insights',
@@ -319,7 +319,7 @@ export const HealthAssistantScreen = () => {
       
       const errorMessage = {
         id: Date.now(),
-        text: "I couldn't access your real health insights right now. Please check that your ET475 device is connected and syncing data.",
+        text: "I couldn't access your real health insights right now. Please check that your device is connected and syncing data.",
         isUser: false,
         timestamp: new Date(),
         type: 'error'
@@ -335,7 +335,7 @@ export const HealthAssistantScreen = () => {
     if (!realDataAvailable) {
       Alert.alert(
         'Real Data Required',
-        'I need real health data from your ET475 device to provide personalized recommendations. Please ensure your device is connected and syncing data.',
+        'I need real health data from your device to provide personalized recommendations. Please ensure your device is connected and syncing data.',
         [{ text: 'OK' }]
       );
       return;
@@ -349,7 +349,7 @@ export const HealthAssistantScreen = () => {
       
       const recommendationsMessage = {
         id: Date.now(),
-        text: recommendations.recommendations || "No personalized recommendations available right now. Connect your ET475 and sync some real health data to get tailored advice.",
+        text: recommendations.recommendations || "No personalized recommendations available right now. Connect your device and sync some real health data to get tailored advice.",
         isUser: false,
         timestamp: new Date(),
         type: 'real_recommendations',
@@ -363,7 +363,7 @@ export const HealthAssistantScreen = () => {
       
       const errorMessage = {
         id: Date.now(),
-        text: "I couldn't access your personalized recommendations right now. Please ensure your ET475 device is connected and syncing real data.",
+        text: "I couldn't access your personalized recommendations right now. Please ensure your device is connected and syncing real data.",
         isUser: false,
         timestamp: new Date(),
         type: 'error'
@@ -418,7 +418,7 @@ export const HealthAssistantScreen = () => {
           {!isUser && hasRealDataContext && usedRealData && (
             <View style={styles.realDataBadge}>
               <Icon name="checkmark" size={12} color="#FFFFFF" />
-              <Text style={styles.realDataBadgeText}>Based on your real ET475 data</Text>
+              <Text style={styles.realDataBadgeText}>Based on your real device data</Text>
             </View>
           )}
           
@@ -432,7 +432,7 @@ export const HealthAssistantScreen = () => {
           {!isUser && !hasRealDevice && !message.type && (
             <View style={styles.noDeviceBadge}>
               <Icon name="bluetooth" size={12} color="#FFFFFF" />
-              <Text style={styles.noDeviceBadgeText}>Connect ET475 for personalized insights</Text>
+              <Text style={styles.noDeviceBadgeText}>Connect device for personalized insights</Text>
             </View>
           )}
           
@@ -543,10 +543,10 @@ export const HealthAssistantScreen = () => {
           <Text style={styles.dataStatusText}>
             {hasRealDevice 
               ? (realDataAvailable 
-                  ? "Real ET475 data available" 
+                  ? "Real device data available" 
                   : "Device connected, waiting for data"
                 )
-              : "Connect your ET475 for personalized assistance"
+              : "Connect your device for personalized assistance"
             }
           </Text>
         </View>
@@ -595,7 +595,7 @@ export const HealthAssistantScreen = () => {
             ]}>
               {hasRealDevice 
                 ? (realDataAvailable ? 'Ready with your real data' : 'Waiting for real data') 
-                : 'Connect ET475 for personalized insights'
+                : 'Connect device for personalized insights'
               }
             </Text>
           </View>
@@ -608,7 +608,7 @@ export const HealthAssistantScreen = () => {
               style={styles.realDataIndicator}
               onPress={() => Alert.alert(
                 'Real Data Active', 
-                'Your ET475 device is connected and providing real health measurements for personalized assistance.'
+                'Your device is connected and providing real health measurements for personalized assistance.'
               )}
             >
               <Icon name="heart" size={16} color="#10B981" />
@@ -620,7 +620,7 @@ export const HealthAssistantScreen = () => {
               style={styles.waitingDataIndicator}
               onPress={() => Alert.alert(
                 'Waiting for Data', 
-                'Your device is connected but waiting for real health measurements. Make sure your ET475 is actively collecting data.'
+                'Your device is connected but waiting for real health measurements. Make sure your device is actively collecting data.'
               )}
             >
               <Icon name="clock" size={16} color="#F59E0B" />
@@ -632,7 +632,7 @@ export const HealthAssistantScreen = () => {
               style={styles.noDeviceIndicator}
               onPress={() => Alert.alert(
                 'No Device Connected', 
-                'Connect your ET475 or compatible smartwatch to get personalized health insights based on real measurements.'
+                'Connect your health monitoring device to get personalized health insights based on real measurements.'
               )}
             >
               <Icon name="bluetooth" size={16} color="#EF4444" />
@@ -667,8 +667,8 @@ export const HealthAssistantScreen = () => {
             placeholder={realDataAvailable 
               ? "Ask about your real health data..." 
               : hasRealDevice 
-              ? "Ask me anything (connect ET475 for personalized insights)..." 
-              : "Ask me anything (connect ET475 for real data insights)..."
+              ? "Ask me anything (connect device for personalized insights)..." 
+              : "Ask me anything (connect device for real data insights)..."
             }
             placeholderTextColor="#9CA3AF"
             value={inputText}
