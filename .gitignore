@@ -2,6 +2,7 @@
 
 # dependencies
 node_modules/
+android/gradle/wrapper/wrapper/dists/
 
 # Expo
 .expo/
@@ -34,3 +35,15 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Android
+android/.gradle/
+android/.idea/
+android/app/build/
+android/local.properties
+android/gradle/wrapper/wrapper/dists/
+
+# Build artifacts
+android/app/libs/
+build/
+

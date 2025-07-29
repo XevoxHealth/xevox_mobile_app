@@ -3,6 +3,7 @@ import {
   NativeEventEmitter, 
   Platform, 
   PermissionsAndroid,
+  DeviceEventEmitter,
   Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,12 +17,8 @@ try {
   api = null;
 }
 
-// Native Modules - will be undefined on web, defined on native
-const HBandSDK = Platform.select({
-  ios: NativeModules.HBandSDK,
-  android: NativeModules.HBandAndroidSDK,
-  default: null
-});
+// Get the HBand SDK native module
+const { VeePooSDK } = NativeModules;
 
 class BluetoothManager {
   constructor() {
@@ -29,47 +26,57 @@ class BluetoothManager {
     this.connectedDevice = null;
     this.discoveredDevices = [];
     this.listeners = [];
-    this.eventEmitter = null;
-    this.webBluetoothDevice = null;
-    this.webCharacteristics = {};
+    this.isConnected = false;
     
-    console.log('BluetoothManager initialized for platform:', Platform.OS);
+    console.log('BluetoothManager initialized for HBand SDK on platform:', Platform.OS);
+    
+    // Set up event listeners for native events
+    this.setupNativeEventListeners();
   }
 
-  // Setup event listeners for device events (Native only)
-  setupEventListeners() {
-    if (!this.eventEmitter) return;
-
-    this.eventEmitter.addListener('onDeviceFound', (device) => {
-      console.log('Device found:', device);
-      this.handleDeviceDiscovered(device);
-    });
-
-    this.eventEmitter.addListener('onConnectionStateChanged', (status) => {
-      console.log('Connection state changed:', status);
-      this.handleConnectionStatusChanged(status);
-    });
-
-    this.eventEmitter.addListener('onHealthDataReceived', (data) => {
-      console.log('Health data received:', data);
-      this.handleHealthDataReceived(data);
-    });
-
-    this.eventEmitter.addListener('onBatteryLevelChanged', (level) => {
-      console.log('Battery level changed:', level);
-      this.handleBatteryLevelChanged(level);
-    });
-
-    this.eventEmitter.addListener('onError', (error) => {
-      console.error('Bluetooth error:', error);
-      this.handleBluetoothError(error);
-    });
+  // Set up native event listeners
+  setupNativeEventListeners() {
+    if (Platform.OS !== 'web') {
+      console.log('Setting up HBand SDK event listeners...');
+      
+      // Listen for device discovery
+      DeviceEventEmitter.addListener('DeviceDiscovered', (device) => {
+        if (device) {
+          console.log('📱 HBand device discovered:', device.name);
+          this.handleDeviceDiscovered(device);
+        }
+      });
+      
+      // Listen for connection status changes
+      DeviceEventEmitter.addListener('ConnectionStatusChanged', (status) => {
+        console.log('📱 HBand connection status:', status);
+        this.handleConnectionStatusChanged(status);
+      });
+      
+      // Listen for scan finished
+      DeviceEventEmitter.addListener('ScanFinished', () => {
+        console.log('📱 HBand scan finished');
+        this.isScanning = false;
+        this.notifyListeners('scanStopped', {});
+      });
+      
+      // Listen for health data
+      DeviceEventEmitter.addListener('HealthDataReceived', (data) => {
+        console.log('📱 HBand health data received:', data);
+        this.handleHealthDataReceived(data);
+      });
+      
+      // Listen for Bluetooth errors
+      DeviceEventEmitter.addListener('BluetoothError', (error) => {
+        console.log('📱 HBand Bluetooth error:', error);
+        this.handleBluetoothError(error);
+      });
+    }
   }
 
   // Request permissions
   async requestPermissions() {
     if (Platform.OS === 'web') {
-      // Web Bluetooth doesn't require explicit permissions
       return true;
     }
 
@@ -103,52 +110,50 @@ class BluetoothManager {
     return true; // iOS
   }
 
-  // Initialize the Bluetooth system
+  // Initialize the HBand SDK
   async initialize() {
     try {
-      console.log('Initializing Bluetooth SDK...');
+      console.log('Initializing HBand SDK for REAL devices only...');
       
       if (Platform.OS === 'web') {
-        // Check Web Bluetooth availability
-        if (!navigator.bluetooth) {
-          console.warn('Web Bluetooth not supported. Using demo mode.');
-          return { success: true, message: 'Demo mode initialized (Web Bluetooth not available)' };
-        }
-        
-        console.log('Web Bluetooth is available');
-        return { success: true, message: 'Web Bluetooth initialized' };
+        throw new Error('HBand SDK not supported on web platform');
+      }
+
+      // Check if native module is available
+      if (!VeePooSDK) {
+        throw new Error('HBand SDK native module not found. Please ensure the SDK is properly integrated.');
       }
 
       const hasPermissions = await this.requestPermissions();
       if (!hasPermissions) {
-        throw new Error('Bluetooth permissions not granted');
-      }
-
-      if (!HBandSDK) {
-        console.warn('HBand SDK not available - using demo mode');
-        return { success: true, message: 'Demo mode initialized (SDK not available)' };
+        throw new Error('Bluetooth permissions not granted. Please enable Bluetooth permissions to connect real devices.');
       }
 
       // Initialize the native SDK
-      const result = await HBandSDK.initialize();
+      const result = await VeePooSDK.initialize();
       
       if (result.success) {
-        console.log('Native Bluetooth SDK initialized successfully');
-        return result;
+        console.log('✅ HBand SDK initialized successfully:', result.message);
+        return { success: true, message: 'HBand SDK initialized for real devices' };
       } else {
-        throw new Error(result.message || 'SDK initialization failed');
+        throw new Error(result.message || 'HBand SDK initialization failed');
       }
+
     } catch (error) {
-      console.error('Bluetooth initialization error:', error);
+      console.error('HBand SDK initialization error:', error);
       throw error;
     }
   }
 
-  // Start scanning for devices
+  // Start scanning for REAL devices only
   async scanForDevices(timeoutMs = 10000) {
     try {
-      console.log('Starting device scan...');
+      console.log(`🔍 Starting HBand SDK device scan (timeout: ${timeoutMs}ms)...`);
       
+      if (!VeePooSDK) {
+        throw new Error('HBand SDK not available. Please ensure the SDK is properly integrated.');
+      }
+
       if (this.isScanning) {
         console.log('Already scanning, stopping current scan...');
         await this.stopScan();
@@ -158,616 +163,239 @@ class BluetoothManager {
       this.isScanning = true;
       this.notifyListeners('scanStarted', { timeout: timeoutMs });
 
-      if (Platform.OS === 'web') {
-        return await this.webBluetoothScan(timeoutMs);
-      }
-
-      if (!HBandSDK) {
-        // Demo mode for native without SDK
-        return this.simulateDeviceScan(timeoutMs);
-      }
-
-      // Native scan
-      const result = await HBandSDK.startScan(timeoutMs);
+      // Start scanning using HBand SDK
+      const result = await VeePooSDK.startScanDevice();
       
-      if (!result.success) {
-        this.isScanning = false;
-        throw new Error(result.message || 'Failed to start scan');
+      if (result.success) {
+        console.log('✅ HBand scan started successfully');
+        
+        // Auto-stop scan after timeout
+        setTimeout(() => {
+          if (this.isScanning) {
+            this.stopScan();
+          }
+        }, timeoutMs);
+        
+        return { success: true, message: 'HBand device scan started' };
+      } else {
+        throw new Error(result.message || 'HBand scan failed');
       }
 
-      // Auto-stop scan after timeout
-      setTimeout(() => {
-        if (this.isScanning) {
-          this.stopScan();
-        }
-      }, timeoutMs);
-
-      return result;
     } catch (error) {
       this.isScanning = false;
-      console.error('Scan start error:', error);
+      console.error('❌ HBand device scan error:', error);
       this.notifyListeners('scanError', { error: error.message });
       throw error;
     }
   }
 
-  // Web Bluetooth scanning
-  async webBluetoothScan(timeoutMs) {
-    try {
-      if (!navigator.bluetooth) {
-        // Fallback to demo mode if Web Bluetooth not available
-        return this.simulateDeviceScan(timeoutMs);
-      }
-
-      console.log('Starting Web Bluetooth scan...');
-
-      // Request device with health-related services
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: false,
-        filters: [
-          { services: ['heart_rate'] },
-          { services: ['battery_service'] },
-          { services: ['device_information'] },
-          { namePrefix: 'H Band' },
-          { namePrefix: 'HBand' },
-          { namePrefix: 'Fitness' },
-          { namePrefix: 'Watch' },
-          { namePrefix: 'Band' },
-          { namePrefix: 'Mi Band' },
-          { namePrefix: 'Amazfit' }
-        ],
-        optionalServices: [
-          'heart_rate',
-          'battery_service', 
-          'device_information',
-          'generic_access',
-          'generic_attribute'
-        ]
-      });
-
-      if (device) {
-        const webDevice = {
-          id: device.id,
-          name: device.name || 'Unknown Device',
-          address: device.id, // Web Bluetooth doesn't expose MAC addresses
-          rssi: -50, // Estimated
-          manufacturer: 'Web Bluetooth',
-          deviceType: 'smartwatch',
-          batteryLevel: null,
-          webBluetoothDevice: device
-        };
-
-        this.handleDeviceDiscovered(webDevice);
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Web Bluetooth scan error:', error);
-      
-      if (error.name === 'NotFoundError') {
-        console.log('No device selected, falling back to demo mode');
-        return this.simulateDeviceScan(timeoutMs);
-      }
-      
-      throw error;
-    }
-  }
-
-  // Updated syncHealthDataWithBackend method
-  async syncHealthDataWithBackend(healthData) {
-    if (!api) {
-      console.error('❌ API service not available');
-      return;
-    }
-    
-    try {
-      console.log('🔄 Starting health data sync...');
-      
-      // Get current user with detailed logging
-      const currentUser = await this.getCurrentUser();
-      
-      if (!currentUser || !currentUser.id) {
-        console.error('❌ User not authenticated - cannot sync health data');
-        console.error('Current user object:', currentUser);
-        
-        // Show user-friendly error
-        Alert.alert(
-          'Authentication Required',
-          'Please log out and log back in to sync your health data.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      console.log('✅ User authenticated for sync:', {
-        id: currentUser.id,
-        email: currentUser.email
-      });
-
-      // Get connected device info - be more flexible here
-      let deviceInfo = this.connectedDevice;
-      if (!deviceInfo && healthData.deviceInfo) {
-        // Fallback to device info from health data
-        deviceInfo = {
-          name: healthData.deviceInfo.name,
-          address: healthData.deviceInfo.address,
-          deviceType: 'hband'
-        };
-        console.log('🔧 Using device info from health data:', deviceInfo);
-      }
-
-      if (!deviceInfo) {
-        console.error('❌ No device info available - cannot sync health data');
-        return;
-      }
-
-      console.log('✅ Device info available:', {
-        name: deviceInfo.name,
-        type: deviceInfo.deviceType,
-        address: deviceInfo.address
-      });
-
-      // Construct payload matching RealTimeHealthData model
-      const payload = {
-        user_id: currentUser.id,
-        device_type: deviceInfo.deviceType || 'hband',
-        device_id: deviceInfo.address || deviceInfo.id || 'unknown',
-        timestamp: healthData.timestamp || new Date().toISOString(),
-        data: { ...healthData }
-      };
-
-      // Remove redundant fields from data
-      if (payload.data.deviceInfo) {
-        delete payload.data.deviceInfo;
-      }
-      if (payload.data.timestamp) {
-        delete payload.data.timestamp;
-      }
-
-      console.log('🔄 Syncing health data with payload:');
-      console.log('  User ID:', payload.user_id);
-      console.log('  Device Type:', payload.device_type);
-      console.log('  Device ID:', payload.device_id);
-      console.log('  Data keys:', Object.keys(payload.data));
-
-      // Sync to backend using your API service
-      const result = await api.syncHealthData(payload);
-      console.log('✅ Health data synced successfully:', result);
-      
-    } catch (error) {
-      console.error('❌ Failed to sync health data with backend:', error);
-      
-      // Handle specific error types
-      if (error.message.includes('Authentication failed')) {
-        Alert.alert(
-          'Authentication Error',
-          'Your session has expired. Please log out and log back in.',
-          [{ text: 'OK' }]
-        );
-      } else if (error.message.includes('User ID mismatch')) {
-        Alert.alert(
-          'Sync Error',
-          'There was an authentication issue. Please log out and log back in.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.error('Sync error details:', error.message);
-      }
-    }
-  }
-
-  // Simulate device discovery for demo purposes
-  simulateDeviceScan(timeoutMs) {
-    console.log('Starting demo device scan...');
-    
-    setTimeout(() => {
-      const demoDevices = [
-        {
-          id: 'demo-hband-1',
-          name: 'H Band Pro',
-          address: 'AA:BB:CC:DD:EE:FF',
-          rssi: -45,
-          manufacturer: 'HBand',
-          deviceType: 'smartwatch',
-          batteryLevel: 85
-        },
-        {
-          id: 'demo-fitness-1', 
-          name: 'Fitness Tracker X1',
-          address: 'FF:EE:DD:CC:BB:AA',
-          rssi: -65,
-          manufacturer: 'Generic',
-          deviceType: 'fitness_tracker',
-          batteryLevel: 92
-        },
-        {
-          id: 'demo-mi-band-1',
-          name: 'Mi Band 7',
-          address: '11:22:33:44:55:66',
-          rssi: -55,
-          manufacturer: 'Xiaomi',
-          deviceType: 'smartwatch',
-          batteryLevel: 76
-        }
-      ];
-      
-      demoDevices.forEach((device, index) => {
-        setTimeout(() => {
-          this.handleDeviceDiscovered(device);
-        }, (index + 1) * 1500);
-      });
-    }, 1000);
-
-    // Auto-stop scan after timeout
-    setTimeout(() => {
-      if (this.isScanning) {
-        this.stopScan();
-      }
-    }, timeoutMs);
-
-    return { success: true };
-  }
-
   // Stop device scanning
   async stopScan() {
     try {
-      console.log('Stopping device scan...');
+      console.log('Stopping HBand device scan...');
       this.isScanning = false;
 
-      if (Platform.OS !== 'web' && HBandSDK) {
-        await HBandSDK.stopScan();
+      if (VeePooSDK) {
+        VeePooSDK.stopScan();
       }
 
       this.notifyListeners('scanStopped', {});
       return { success: true };
     } catch (error) {
-      console.error('Scan stop error:', error);
+      console.error('HBand scan stop error:', error);
       return { success: false, message: error.message };
     }
   }
 
-  // Connect to a specific device
+  // Connect to a real device
   async connectToDevice(deviceId, deviceAddress) {
     try {
-      console.log(`Connecting to device: ${deviceId} (${deviceAddress})`);
+      console.log(`Connecting to HBand device: ${deviceId} (${deviceAddress})`);
       
+      if (!VeePooSDK) {
+        throw new Error('HBand SDK not available');
+      }
+
       const device = this.discoveredDevices.find(d => d.id === deviceId);
       if (!device) {
         throw new Error('Device not found in discovered devices');
       }
 
-      if (Platform.OS === 'web') {
-        return await this.webBluetoothConnect(device);
+      if (!device.isReal) {
+        throw new Error('Device is not validated as a real HBand/ET475 device');
       }
 
-      if (!HBandSDK) {
-        // Demo mode for native
-        return this.simulateDeviceConnection(device);
-      }
-
-      // Native connection
-      const result = await HBandSDK.connectDevice(deviceAddress);
+      // Connect using HBand SDK
+      const result = await VeePooSDK.connectDevice(deviceAddress);
       
       if (result.success) {
-        console.log('Native connection initiated successfully');
-        return result;
+        console.log('✅ HBand device connection initiated');
+        return { success: true, device: device };
       } else {
-        throw new Error(result.message || 'Connection failed');
+        throw new Error(result.message || 'HBand connection failed');
       }
+
     } catch (error) {
-      console.error('Connection error:', error);
-      this.notifyListeners('connectionError', { error: error.message });
+      console.error('HBand device connection error:', error);
+      this.notifyListeners('bluetoothError', { message: error.message });
       throw error;
     }
   }
 
-  // Web Bluetooth connection
-  async webBluetoothConnect(device) {
+  // Confirm device password (required by HBand SDK)
+  async confirmDevicePassword(password = "0000", is24HourModel = true) {
     try {
-      const webDevice = device.webBluetoothDevice;
-      if (!webDevice) {
-        throw new Error('Web Bluetooth device not available');
+      console.log('Confirming HBand device password...');
+      
+      if (!VeePooSDK) {
+        throw new Error('HBand SDK not available');
       }
 
-      console.log('Connecting to Web Bluetooth device...');
+      const result = await VeePooSDK.confirmDevicePwd(password, is24HourModel);
       
-      // Connect to GATT server
-      const server = await webDevice.gatt.connect();
-      console.log('Connected to GATT server');
-
-      // Get available services
-      const services = await server.getPrimaryServices();
-      console.log('Available services:', services.map(s => s.uuid));
-
-      // Try to connect to common health services
-      const healthServices = {
-        heartRate: '0000180d-0000-1000-8000-00805f9b34fb',
-        battery: '0000180f-0000-1000-8000-00805f9b34fb',
-        deviceInfo: '0000180a-0000-1000-8000-00805f9b34fb'
-      };
-
-      for (const [serviceName, serviceUuid] of Object.entries(healthServices)) {
-        try {
-          const service = await server.getPrimaryService(serviceUuid);
-          const characteristics = await service.getCharacteristics();
-          this.webCharacteristics[serviceName] = { service, characteristics };
-          console.log(`Connected to ${serviceName} service`);
-        } catch (error) {
-          console.log(`${serviceName} service not available:`, error.message);
-        }
+      if (result.success) {
+        console.log('✅ HBand device password confirmed');
+        return { success: true };
+      } else {
+        throw new Error(result.message || 'Password confirmation failed');
       }
 
-      // Store the connected device
-      this.webBluetoothDevice = webDevice;
-      
-      // Simulate successful connection
-      setTimeout(() => {
-        this.handleConnectionStatusChanged({
-          connected: true,
-          device: device,
-          message: 'Connected via Web Bluetooth'
-        });
-      }, 1000);
-
-      return { success: true, message: 'Web Bluetooth connection initiated' };
     } catch (error) {
-      console.error('Web Bluetooth connection error:', error);
+      console.error('HBand password confirmation error:', error);
       throw error;
     }
-  }
-
-  // Simulate device connection for demo
-  simulateDeviceConnection(device) {
-    console.log('🎭 Simulating device connection...');
-    
-    setTimeout(() => {
-      // Store the device before triggering the event
-      this.connectedDevice = {
-        ...device,
-        deviceType: device.deviceType || 'hband'
-      };
-      
-      console.log('✅ Simulated device stored:', this.connectedDevice);
-      
-      this.handleConnectionStatusChanged({
-        connected: true,
-        device: this.connectedDevice,
-        message: 'Connected successfully (Demo mode)'
-      });
-    }, 2000);
-
-    return { success: true, message: 'Demo connection initiated' };
   }
 
   // Disconnect from current device
   async disconnectDevice() {
     try {
-      console.log('Disconnecting device...');
+      console.log('Disconnecting HBand device...');
       
-      if (!this.connectedDevice && !this.webBluetoothDevice) {
+      if (!this.connectedDevice) {
         return { success: true, message: 'No device connected' };
       }
 
-      if (Platform.OS === 'web' && this.webBluetoothDevice) {
-        // Web Bluetooth disconnect
-        if (this.webBluetoothDevice.gatt.connected) {
-          this.webBluetoothDevice.gatt.disconnect();
-        }
-        this.webBluetoothDevice = null;
-        this.webCharacteristics = {};
-      }
-
-      if (Platform.OS !== 'web' && HBandSDK) {
-        await HBandSDK.disconnect();
+      if (VeePooSDK) {
+        await VeePooSDK.disconnect();
       }
 
       const device = this.connectedDevice;
       this.connectedDevice = null;
+      this.isConnected = false;
       
       this.handleConnectionStatusChanged({
         connected: false,
         device: device,
-        message: 'Disconnected successfully'
+        message: 'Disconnected from HBand device'
       });
       
       return { success: true };
     } catch (error) {
-      console.error('Disconnect error:', error);
+      console.error('HBand device disconnect error:', error);
       throw error;
     }
   }
 
-  // Get health data from connected device
+  // Get real health data from connected device
   async getHealthData() {
     try {
-      console.log('Getting health data from device...');
+      console.log('Getting REAL health data from HBand device...');
       
-      if (!this.connectedDevice && !this.webBluetoothDevice) {
-        throw new Error('No device connected');
+      if (!this.connectedDevice) {
+        throw new Error('No HBand device connected');
       }
 
-      if (Platform.OS === 'web') {
-        return await this.getWebBluetoothHealthData();
+      if (!VeePooSDK) {
+        throw new Error('HBand SDK not available');
       }
 
-      if (!HBandSDK) {
-        // Demo mode
-        const demoData = this.generateDemoHealthData();
-        return { success: true, data: demoData };
-      }
-
-      // Native health data
-      const result = await HBandSDK.getHealthData();
+      // Get health data using HBand SDK
+      const result = await VeePooSDK.getHealthData();
       
       if (result.success) {
-        const formattedData = this.formatHealthData(result.data);
-        return { success: true, data: formattedData };
+        const realData = this.validateRealHealthData(result.data);
+        return { success: true, data: realData };
+      } else {
+        throw new Error(result.message || 'Failed to get REAL health data');
       }
-      
-      return result;
     } catch (error) {
-      console.error('Get health data error:', error);
+      console.error('Get REAL health data error:', error);
       throw error;
     }
   }
 
-  // Get health data from Web Bluetooth
-  async getWebBluetoothHealthData() {
-    try {
-      const healthData = {};
-
-      // Try to read heart rate
-      if (this.webCharacteristics.heartRate) {
-        try {
-          const heartRateChar = this.webCharacteristics.heartRate.characteristics
-            .find(char => char.uuid === '00002a37-0000-1000-8000-00805f9b34fb');
-          
-          if (heartRateChar) {
-            const value = await heartRateChar.readValue();
-            const heartRate = value.getUint16(1, true);
-            healthData.heartRate = heartRate;
-          }
-        } catch (error) {
-          console.log('Could not read heart rate:', error);
-        }
-      }
-
-      // Try to read battery level
-      if (this.webCharacteristics.battery) {
-        try {
-          const batteryChar = this.webCharacteristics.battery.characteristics
-            .find(char => char.uuid === '00002a19-0000-1000-8000-00805f9b34fb');
-          
-          if (batteryChar) {
-            const value = await batteryChar.readValue();
-            const batteryLevel = value.getUint8(0);
-            healthData.batteryLevel = batteryLevel;
-          }
-        } catch (error) {
-          console.log('Could not read battery level:', error);
-        }
-      }
-
-      // Fill in with demo data for missing values
-      const demoData = this.generateDemoHealthData();
-      return { 
-        success: true, 
-        data: { ...demoData, ...healthData }
-      };
-    } catch (error) {
-      console.error('Web Bluetooth health data error:', error);
-      // Fallback to demo data
-      const demoData = this.generateDemoHealthData();
-      return { success: true, data: demoData };
+  // Validate that health data is real (not generated)
+  validateRealHealthData(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid health data received from device');
     }
-  }
 
-  // Start real-time health monitoring
-  async startHealthMonitoring() {
-    try {
-      console.log('Starting real-time health monitoring...');
-      
-      if (!this.connectedDevice && !this.webBluetoothDevice) {
-        throw new Error('No device connected');
-      }
+    const validatedData = {};
 
-      if (Platform.OS === 'web') {
-        this.startWebBluetoothMonitoring();
-        return { success: true };
-      }
-
-      if (!HBandSDK) {
-        // Demo mode
-        this.startDemoHealthUpdates();
-        return { success: true };
-      }
-
-      // Native monitoring
-      const result = await HBandSDK.startRealTimeMonitoring();
-      return result;
-    } catch (error) {
-      console.error('Start monitoring error:', error);
-      throw error;
+    // Validate each metric with realistic ranges
+    if (data.heartRate && data.heartRate > 30 && data.heartRate < 200) {
+      validatedData.heartRate = data.heartRate;
     }
-  }
-
-  // Start Web Bluetooth monitoring
-  startWebBluetoothMonitoring() {
-    console.log('Starting Web Bluetooth health monitoring...');
     
-    // Start periodic health data updates
-    this.webHealthInterval = setInterval(async () => {
-      try {
-        const result = await this.getWebBluetoothHealthData();
-        if (result.success) {
-          this.handleHealthDataReceived(result.data);
-        }
-      } catch (error) {
-        console.error('Web Bluetooth monitoring error:', error);
-      }
-    }, 10000); // Update every 10 seconds
-  }
-
-  // Stop real-time monitoring
-  async stopHealthMonitoring() {
-    try {
-      console.log('Stopping real-time health monitoring...');
-      
-      if (this.demoHealthInterval) {
-        clearInterval(this.demoHealthInterval);
-        this.demoHealthInterval = null;
-      }
-
-      if (this.webHealthInterval) {
-        clearInterval(this.webHealthInterval);
-        this.webHealthInterval = null;
-      }
-
-      if (Platform.OS !== 'web' && HBandSDK) {
-        return await HBandSDK.stopRealTimeMonitoring();
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Stop monitoring error:', error);
-      throw error;
+    if (data.steps && data.steps >= 0 && data.steps < 100000) {
+      validatedData.steps = data.steps;
     }
+    
+    if (data.calories && data.calories >= 0 && data.calories < 10000) {
+      validatedData.calories = data.calories;
+    }
+    
+    if (data.distance && data.distance >= 0 && data.distance < 100) {
+      validatedData.distance = data.distance;
+    }
+
+    // Add timestamp and device info
+    validatedData.timestamp = new Date().toISOString();
+    validatedData.deviceInfo = {
+      name: this.connectedDevice?.name,
+      address: this.connectedDevice?.address,
+      isReal: true
+    };
+
+    return validatedData;
   }
 
-  // Event handlers
+  // Event handlers for HBand device events
   handleDeviceDiscovered(device) {
-    console.log('Device discovered:', device);
+    console.log('HBand device discovered:', device);
     
-    const isSupported = this.isSupportedDevice(device);
     const alreadyFound = this.discoveredDevices.find(d => d.id === device.id || d.address === device.address);
     
-    if (isSupported && !alreadyFound) {
-      this.discoveredDevices.push({
+    if (!alreadyFound) {
+      const realDevice = {
         id: device.id || device.address,
-        name: device.name || 'Unknown Device',
+        name: device.name || 'Unknown HBand Device',
         address: device.address,
         rssi: device.rssi || -100,
-        manufacturer: device.manufacturer || 'Unknown',
-        deviceType: device.deviceType || 'smartwatch',
+        manufacturer: device.manufacturer || 'VeePoo',
+        deviceType: device.deviceType || 'et475',
         batteryLevel: device.batteryLevel,
+        isReal: true,
         ...device
-      });
+      };
 
-      this.notifyListeners('deviceFound', device);
+      this.discoveredDevices.push(realDevice);
+      this.notifyListeners('deviceFound', realDevice);
     }
   }
 
   handleConnectionStatusChanged(status) {
-    console.log('🔗 Connection status changed:', status);
+    console.log('🔗 HBand connection status changed:', status);
     
     if (status.connected && status.device) {
-      // Store the connected device
-      this.connectedDevice = status.device;
-      console.log('✅ Device connected and stored:', this.connectedDevice.name);
+      // Store the connected real device
+      this.connectedDevice = { ...status.device, isReal: true };
+      this.isConnected = true;
+      console.log('✅ HBand device connected and stored:', this.connectedDevice.name);
       
-      // Register device with backend
+      // Register real device with backend
       if (api) {
-        this.registerDeviceWithBackend(status.device);
+        this.registerRealDeviceWithBackend(status.device);
       }
       
       // Start health monitoring automatically
@@ -776,8 +404,9 @@ class BluetoothManager {
       }, 2000);
       
     } else if (!status.connected) {
-      console.log('❌ Device disconnected');
+      console.log('❌ HBand device disconnected');
       this.connectedDevice = null;
+      this.isConnected = false;
       this.stopHealthMonitoring().catch(console.error);
     }
 
@@ -785,179 +414,167 @@ class BluetoothManager {
   }
 
   handleHealthDataReceived(data) {
-    console.log('📊 Health data received:', data);
-    const formattedData = this.formatHealthData(data);
+    console.log('📊 HBand health data received:', data);
     
-    // Make sure we have a connected device reference
-    if (!this.connectedDevice) {
-      console.warn('⚠️ Health data received but no connected device reference');
-      // Try to reconstruct device info from data if available
-      if (data.deviceInfo) {
-        this.connectedDevice = {
-          name: data.deviceInfo.name,
-          address: data.deviceInfo.address,
-          deviceType: 'hband', // Default type
-          batteryLevel: data.deviceInfo.batteryLevel
-        };
-        console.log('🔧 Reconstructed device info:', this.connectedDevice);
+    try {
+      // Validate this is real data
+      const validatedData = this.validateRealHealthData(data);
+      
+      // Make sure we have a connected device reference
+      if (!this.connectedDevice) {
+        console.warn('⚠️ Health data received but no connected device reference');
+        throw new Error('No connected device available for health data');
       }
+      
+      // Send real data to backend
+      if (api) {
+        this.syncRealHealthDataWithBackend(validatedData);
+      } else {
+        console.warn('⚠️ Cannot sync - API service not available');
+      }
+      
+      this.notifyListeners('healthDataReceived', validatedData);
+      
+    } catch (error) {
+      console.error('❌ Error processing HBand health data:', error);
+      this.notifyListeners('healthDataError', { error: error.message });
     }
-    
-    // Send to backend if API is available and we have device info
-    if (api && this.connectedDevice) {
-      this.syncHealthDataWithBackend(formattedData);
-    } else {
-      console.warn('⚠️ Cannot sync - missing API or device connection');
-    }
-    
-    this.notifyListeners('healthDataReceived', formattedData);
-  }
-
-  handleBatteryLevelChanged(level) {
-    console.log('Battery level changed:', level);
-    this.notifyListeners('batteryLevelChanged', { level });
   }
 
   handleBluetoothError(error) {
-    console.error('Bluetooth error:', error);
+    console.error('HBand Bluetooth error:', error);
     this.notifyListeners('bluetoothError', error);
   }
 
-  // Utility methods
-  isSupportedDevice(device) {
-    const supportedNames = [
-      'hband', 'h-band', 'fitness', 'smartwatch', 'band', 'watch',
-      'tracker', 'health', 'sport', 'mi band', 'amazfit', 'veepoo'
-    ];
-    
-    const deviceName = (device.name || '').toLowerCase();
-    return supportedNames.some(name => deviceName.includes(name));
-  }
-
-  formatHealthData(rawData) {
-    if (!rawData) return {};
-    
-    return {
-      steps: rawData.steps || Math.floor(Math.random() * 3000) + 5000,
-      heartRate: rawData.heartRate || rawData.bpm || Math.floor(Math.random() * 30) + 60,
-      bloodPressure: rawData.bloodPressure || {
-        systolic: Math.floor(Math.random() * 20) + 110,
-        diastolic: Math.floor(Math.random() * 15) + 70
-      },
-      oxygenSaturation: rawData.bloodOxygen || rawData.spo2 || Math.floor(Math.random() * 5) + 95,
-      sleep: rawData.sleep || {
-        duration: Math.random() * 2 + 6,
-        quality: Math.floor(Math.random() * 20) + 75
-      },
-      caloriesBurned: rawData.calories || Math.floor(Math.random() * 500) + 1200,
-      distance: rawData.distance || Math.random() * 3 + 2,
-      timestamp: new Date().toISOString(),
-      deviceInfo: {
-        name: this.connectedDevice?.name,
-        address: this.connectedDevice?.address,
-        batteryLevel: this.connectedDevice?.batteryLevel
+  // Start real-time health monitoring
+  async startHealthMonitoring() {
+    try {
+      console.log('Starting HBand real-time health monitoring...');
+      
+      if (!this.connectedDevice) {
+        throw new Error('No HBand device connected');
       }
-    };
+
+      // The HBand SDK will automatically send health data updates via events
+      // We just need to make sure we're listening for them
+      return { success: true };
+    } catch (error) {
+      console.error('Start HBand monitoring error:', error);
+      throw error;
+    }
   }
 
-  generateDemoHealthData() {
-    return {
-      steps: Math.floor(Math.random() * 3000) + 5000,
-      heartRate: Math.floor(Math.random() * 30) + 60,
-      bloodPressure: {
-        systolic: Math.floor(Math.random() * 20) + 110,
-        diastolic: Math.floor(Math.random() * 15) + 70
-      },
-      oxygenSaturation: Math.floor(Math.random() * 5) + 95,
-      sleep: {
-        duration: Math.random() * 2 + 6,
-        quality: Math.floor(Math.random() * 20) + 75
-      },
-      caloriesBurned: Math.floor(Math.random() * 500) + 1200,
-      distance: Math.random() * 3 + 2,
-      timestamp: new Date().toISOString()
-    };
+  // Stop real-time monitoring
+  async stopHealthMonitoring() {
+    try {
+      console.log('Stopping HBand real-time health monitoring...');
+      return { success: true };
+    } catch (error) {
+      console.error('Stop HBand monitoring error:', error);
+      throw error;
+    }
   }
 
-  startDemoHealthUpdates() {
-    this.demoHealthInterval = setInterval(() => {
-      if (this.connectedDevice) {
-        const demoData = this.generateDemoHealthData();
-        this.handleHealthDataReceived(demoData);
+  // Sync real health data with backend
+  async syncRealHealthDataWithBackend(healthData) {
+    if (!api) {
+      console.error('❌ API service not available');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Starting HBand health data sync...');
+      
+      const currentUser = await this.getCurrentUser();
+      
+      if (!currentUser || !currentUser.id) {
+        console.error('❌ User not authenticated - cannot sync HBand health data');
+        Alert.alert(
+          'Authentication Required',
+          'Please log out and log back in to sync your HBand health data.',
+          [{ text: 'OK' }]
+        );
+        return;
       }
-    }, 5000); // Update every 5 seconds
+
+      let deviceInfo = this.connectedDevice;
+      if (!deviceInfo) {
+        console.error('❌ No HBand device info available');
+        return;
+      }
+
+      // Construct payload for real health data
+      const payload = {
+        user_id: currentUser.id,
+        device_type: deviceInfo.deviceType || 'et475',
+        device_id: deviceInfo.address || deviceInfo.id || 'unknown',
+        timestamp: healthData.timestamp || new Date().toISOString(),
+        data: { 
+          ...healthData,
+          isRealData: true, // Mark as real data
+          deviceValidated: true
+        }
+      };
+
+      // Remove redundant fields
+      if (payload.data.deviceInfo) {
+        delete payload.data.deviceInfo;
+      }
+      if (payload.data.timestamp) {
+        delete payload.data.timestamp;
+      }
+
+      console.log('🔄 Syncing HBand health data with payload:');
+      console.log('  User ID:', payload.user_id);
+      console.log('  Device Type:', payload.device_type);
+      console.log('  Device ID:', payload.device_id);
+      console.log('  Data keys:', Object.keys(payload.data));
+
+      // Sync real data to backend
+      const result = await api.syncHealthData(payload);
+      console.log('✅ HBand health data synced successfully:', result);
+      
+    } catch (error) {
+      console.error('❌ Failed to sync HBand health data with backend:', error);
+    }
   }
 
-  async registerDeviceWithBackend(device) {
+  async registerRealDeviceWithBackend(device) {
     if (!api) return;
     
     try {
       const result = await api.connectSmartwatch({
         device_name: device.name,
         device_address: device.address,
-        device_type: device.deviceType || 'smartwatch',
-        manufacturer: device.manufacturer
+        device_type: device.deviceType || 'et475',
+        manufacturer: device.manufacturer || 'VeePoo',
+        is_real_device: true
       });
       
-      console.log('Device registered with backend:', result);
+      console.log('HBand device registered with backend:', result);
     } catch (error) {
-      console.error('Failed to register device with backend:', error);
+      console.error('Failed to register HBand device with backend:', error);
     }
   }
 
   async getCurrentUser() {
     try {
-      console.log('🔍 Getting current user from React Native storage...');
-      
       let userToken, userData;
       
       if (Platform.OS === 'web') {
         userToken = typeof localStorage !== 'undefined' ? localStorage.getItem('userToken') : null;
         userData = typeof localStorage !== 'undefined' ? localStorage.getItem('userData') : null;
       } else {
-        // React Native
         userToken = await AsyncStorage.getItem('userToken');
         userData = await AsyncStorage.getItem('userData');
       }
       
-      console.log('🔍 Storage check:');
-      console.log('  Token exists:', !!userToken);
-      console.log('  User data exists:', !!userData);
-      
-      if (!userToken) {
-        console.warn('❌ No auth token found in storage');
+      if (!userToken || !userData) {
         return null;
       }
       
-      if (!userData) {
-        console.warn('❌ No user data found in storage');
-        return null;
-      }
-      
-      try {
-        const user = JSON.parse(userData);
-        console.log('🔍 Parsed user data:', {
-          hasId: !!user.id,
-          hasEmail: !!user.email,
-          hasName: !!user.name
-        });
-        
-        // Verify user has required fields
-        if (user && user.id) {
-          console.log('✅ Valid user found:', {
-            id: user.id,
-            email: user.email,
-            name: user.name
-          });
-          return user;
-        } else {
-          console.warn('❌ User object missing required fields:', user);
-          return null;
-        }
-      } catch (parseError) {
-        console.error('❌ Error parsing user data:', parseError);
-        return null;
-      }
+      const user = JSON.parse(userData);
+      return user && user.id ? user : null;
     } catch (error) {
       console.error('❌ Error getting current user:', error);
       return null;
@@ -985,7 +602,7 @@ class BluetoothManager {
 
   // Getters
   isConnected() {
-    return this.connectedDevice !== null || this.webBluetoothDevice !== null;
+    return this.isConnected && this.connectedDevice !== null;
   }
 
   getConnectedDevice() {
@@ -1002,24 +619,24 @@ class BluetoothManager {
 
   // Cleanup
   cleanup() {
-    console.log('Cleaning up Bluetooth manager...');
+    console.log('Cleaning up HBand Bluetooth manager...');
     
     this.stopScan();
     this.stopHealthMonitoring();
     
-    if (this.eventEmitter) {
-      this.eventEmitter.removeAllListeners();
-    }
-    
-    if (this.webBluetoothDevice && this.webBluetoothDevice.gatt.connected) {
-      this.webBluetoothDevice.gatt.disconnect();
+    // Remove event listeners
+    if (Platform.OS !== 'web') {
+      DeviceEventEmitter.removeAllListeners('DeviceDiscovered');
+      DeviceEventEmitter.removeAllListeners('ConnectionStatusChanged');
+      DeviceEventEmitter.removeAllListeners('ScanFinished');
+      DeviceEventEmitter.removeAllListeners('HealthDataReceived');
+      DeviceEventEmitter.removeAllListeners('BluetoothError');
     }
     
     this.listeners = [];
     this.discoveredDevices = [];
     this.connectedDevice = null;
-    this.webBluetoothDevice = null;
-    this.webCharacteristics = {};
+    this.isConnected = false;
   }
 }
 

@@ -1,4 +1,4 @@
-// Updated HomeScreen.tsx with integrated Health Dashboard
+// Updated HomeScreen.tsx - Fixed Boolean Type Error
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -16,7 +16,7 @@ import {
 import { useAuth, useHealth } from './context';
 import BluetoothManager from './bluetoothManager';
 import { api } from './api_service';
-import { HealthDashboard} from './HealthDashboardComponent'; // Import the new component
+import { HealthDashboard} from './HealthDashboardComponent';
 
 // Simple components
 const Icon = ({ name, size = 24, color = '#000', style, ...props }) => (
@@ -59,12 +59,18 @@ export const HomeScreen = () => {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [showDeviceList, setShowDeviceList] = useState(false);
+  
+  // FIXED: Separate bluetooth error state for better type handling
+  const [bluetoothError, setBluetoothError] = useState(null); // String error message
+  const [hasBluetoothError, setHasBluetoothError] = useState(false); // Boolean flag
+  
+  const [scanAttempts, setScanAttempts] = useState(0);
 
   useEffect(() => {
-    // Initialize Bluetooth Manager
+    // Initialize Bluetooth Manager for real devices only
     initializeBluetoothManager();
     
-    // Check if user already has a connected device
+    // Check if user already has a real connected device
     checkExistingDevice();
     
     return () => {
@@ -74,25 +80,43 @@ export const HomeScreen = () => {
 
   const initializeBluetoothManager = async () => {
     try {
+      console.log('Initializing Real Bluetooth Manager...');
+      
       // Add Bluetooth event listeners
       BluetoothManager.addListener(handleBluetoothEvent);
       
-      // Initialize the Bluetooth SDK
-      await BluetoothManager.initialize();
-      console.log('Bluetooth Manager initialized successfully');
+      // Initialize the Bluetooth SDK for real devices
+      const result = await BluetoothManager.initialize();
+      
+      if (result.success) {
+        console.log('✅ Real Bluetooth Manager initialized successfully');
+        setBluetoothError(null);
+        setHasBluetoothError(false);
+      } else {
+        throw new Error(result.message || 'Bluetooth initialization failed');
+      }
     } catch (error) {
-      console.error('Failed to initialize Bluetooth Manager:', error);
-      Alert.alert('Bluetooth Error', 'Failed to initialize Bluetooth. Please check your device settings.');
+      console.error('❌ Failed to initialize Real Bluetooth Manager:', error);
+      setBluetoothError(error.message);
+      setHasBluetoothError(true);
+      
+      Alert.alert(
+        'Bluetooth Initialization Failed', 
+        `Cannot connect to real devices: ${error.message}\n\nPlease check:\n• Bluetooth is enabled\n• App has Bluetooth permissions\n• Device supports Bluetooth connectivity`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
   const handleBluetoothEvent = async (event, data) => {
-    console.log('🔗 Bluetooth Event:', event, data);
+    console.log('🔗 Real Bluetooth Event:', event, data);
     
     switch (event) {
       case 'scanStarted':
         setIsScanning(true);
         setDiscoveredDevices([]);
+        setBluetoothError(null);
+        setHasBluetoothError(false);
         break;
         
       case 'scanStopped':
@@ -100,125 +124,272 @@ export const HomeScreen = () => {
         break;
         
       case 'deviceFound':
-        setDiscoveredDevices(prev => {
-          const exists = prev.find(d => d.id === data.id || d.address === data.address);
-          if (!exists) {
-            return [...prev, data];
-          }
-          return prev;
-        });
+        console.log('✅ Real device found:', data.name, data.isReal);
+        if (data.isReal) {
+          setDiscoveredDevices(prev => {
+            const exists = prev.find(d => d.id === data.id || d.address === data.address);
+            if (!exists) {
+              return [...prev, data];
+            }
+            return prev;
+          });
+        } else {
+          console.log('⚠️ Ignoring non-real device:', data.name);
+        }
         break;
         
       case 'connectionStatusChanged':
-        if (data.connected && data.device) {
+        if (data.connected && data.device && data.device.isReal) {
           setConnectedDevice(data.device);
           setShowDeviceList(false);
-          Alert.alert('Success', `Connected to ${data.device.name || 'device'} successfully!`);
+          setBluetoothError(null);
+          setHasBluetoothError(false);
+          Alert.alert(
+            'Real Device Connected', 
+            `Successfully connected to your ${data.device.name}!\n\nYour real health data will now be synced.`,
+            [{ text: 'Great!' }]
+          );
         } else if (!data.connected) {
           setConnectedDevice(null);
+          Alert.alert(
+            'Device Disconnected', 
+            'Your device has been disconnected. Health data sync has stopped.',
+            [{ text: 'OK' }]
+          );
         }
         break;
         
       case 'healthDataReceived':
-        console.log('📊 Health data received on HomeScreen:', data);
-        // The sync will be handled by BluetoothManager
+        console.log('📊 Real health data received on HomeScreen:', Object.keys(data));
+        // Real data sync will be handled by BluetoothManager
+        break;
+        
+      case 'healthDataError':
+        console.error('❌ Health data error:', data.error);
+        Alert.alert(
+          'Health Data Error', 
+          `Error reading real health data: ${data.error}\n\nPlease check your device connection.`,
+          [{ text: 'OK' }]
+        );
         break;
         
       case 'bluetoothError':
-        Alert.alert('Bluetooth Error', data.message || 'An error occurred with Bluetooth connection');
+        console.error('❌ Real Bluetooth error:', data.message);
+        setBluetoothError(data.message);
+        setHasBluetoothError(true);
+        Alert.alert(
+          'Real Device Error', 
+          `Bluetooth error: ${data.message || 'Unknown error occurred'}`,
+          [{ text: 'OK' }]
+        );
+        break;
+        
+      case 'scanError':
+        console.error('❌ Scan error:', data.error);
+        setIsScanning(false);
+        setBluetoothError(data.error);
+        setHasBluetoothError(true);
+        Alert.alert(
+          'Device Scan Failed', 
+          `Failed to scan for real devices: ${data.error}\n\nPlease check:\n• Your ET475 is in pairing mode\n• Device is nearby and charged\n• Bluetooth is enabled`,
+          [
+            { text: 'Try Again', onPress: () => startDeviceScan() },
+            { text: 'Cancel' }
+          ]
+        );
         break;
     }
   };
 
   const checkExistingDevice = async () => {
     try {
-      // Check if user has a device connected from previous session
+      // Check if user has a real device connected from previous session
       const existingDevice = BluetoothManager.getConnectedDevice();
-      if (existingDevice) {
+      if (existingDevice && existingDevice.isReal) {
+        console.log('✅ Found existing real device connection:', existingDevice.name);
         setConnectedDevice(existingDevice);
+      } else {
+        console.log('ℹ️ No existing real device connection found');
       }
     } catch (error) {
-      console.error('Error checking existing device:', error);
+      console.error('Error checking existing real device:', error);
     }
   };
 
   const startDeviceScan = async () => {
     try {
+      if (hasBluetoothError) {
+        Alert.alert(
+          'Bluetooth Not Available',
+          `Cannot scan for devices: ${bluetoothError}\n\nPlease restart the app and ensure Bluetooth is working.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
       setShowDeviceList(true);
       setDiscoveredDevices([]);
+      setScanAttempts(prev => prev + 1);
       
-      console.log('Starting device scan...');
-      await BluetoothManager.scanForDevices(15000); // Scan for 15 seconds
+      console.log(`Starting real device scan (attempt ${scanAttempts + 1})...`);
+      
+      // Extended scan time for real devices
+      await BluetoothManager.scanForDevices(20000); // 20 seconds for real device discovery
       
     } catch (error) {
-      console.error('Scan error:', error);
-      Alert.alert('Scan Error', error.message || 'Failed to scan for devices');
+      console.error('❌ Real device scan error:', error);
       setIsScanning(false);
+      setBluetoothError(error.message);
+      setHasBluetoothError(true);
+      
+      Alert.alert(
+        'Scan Failed', 
+        `Cannot scan for real devices: ${error.message}\n\nTroubleshooting:\n• Ensure your ET475 is in pairing mode\n• Make sure device is charged and nearby\n• Check Bluetooth permissions\n• Try restarting Bluetooth on your phone`,
+        [
+          { text: 'Retry', onPress: () => startDeviceScan() },
+          { text: 'Cancel', onPress: () => setShowDeviceList(false) }
+        ]
+      );
     }
   };
 
   const connectToDevice = async (device) => {
     try {
-      console.log('Connecting to device:', device.name);
+      if (!device.isReal) {
+        Alert.alert(
+          'Invalid Device',
+          'This device is not validated as a real ET475 or compatible device.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      console.log('🔄 Connecting to real device:', device.name);
       
-      // Connect using Bluetooth Manager
+      // Show loading state
+      Alert.alert(
+        'Connecting...',
+        `Establishing connection to ${device.name}.\n\nThis may take a few moments.`,
+        [{ text: 'Please Wait', style: 'cancel' }]
+      );
+      
+      // Connect using Real Bluetooth Manager
       await BluetoothManager.connectToDevice(device.id, device.address);
       
-      // Register device with backend
-      await connectDevice({
+      // Register real device with backend
+      const backendResult = await connectDevice({
         device_name: device.name,
         device_address: device.address,
-        device_type: device.deviceType || 'hband',
-        manufacturer: device.manufacturer
+        device_type: device.deviceType || 'et475',
+        manufacturer: device.manufacturer,
+        is_real_device: true
       });
       
+      if (!backendResult.success) {
+        console.warn('⚠️ Backend registration failed but device connected');
+      }
+      
     } catch (error) {
-      console.error('Connection error:', error);
-      Alert.alert('Connection Error', error.message || 'Failed to connect to device');
+      console.error('❌ Real device connection error:', error);
+      Alert.alert(
+        'Connection Failed', 
+        `Failed to connect to ${device.name}: ${error.message}\n\nTroubleshooting:\n• Make sure device is in pairing mode\n• Ensure device is charged and nearby\n• Try forgetting and re-pairing the device\n• Restart both devices if needed`,
+        [
+          { text: 'Retry', onPress: () => connectToDevice(device) },
+          { text: 'Cancel' }
+        ]
+      );
     }
   };
 
   const disconnectDevice = async () => {
     try {
       Alert.alert(
-        'Disconnect Device',
-        'Are you sure you want to disconnect your device?',
+        'Disconnect Real Device',
+        `Are you sure you want to disconnect your ${connectedDevice?.name}?\n\nThis will stop real health data syncing.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Disconnect', 
             style: 'destructive',
             onPress: async () => {
-              await BluetoothManager.disconnectDevice();
-              setConnectedDevice(null);
+              try {
+                await BluetoothManager.disconnectDevice();
+                setConnectedDevice(null);
+                console.log('✅ Real device disconnected successfully');
+              } catch (error) {
+                console.error('❌ Error disconnecting real device:', error);
+                Alert.alert('Disconnect Error', error.message);
+              }
             }
           }
         ]
       );
     } catch (error) {
-      console.error('Disconnect error:', error);
+      console.error('❌ Disconnect error:', error);
     }
   };
 
-  const renderDeviceItem = ({ item }) => (
+  const renderRealDeviceItem = ({ item }) => (
     <TouchableOpacity
-      style={styles.deviceItem}
-      onPress={() => connectToDevice(item)}
+      style={[
+        styles.deviceItem,
+        !item.isReal && styles.deviceItemDisabled
+      ]}
+      onPress={() => item.isReal ? connectToDevice(item) : null}
+      disabled={!item.isReal}
     >
       <View style={styles.deviceIcon}>
-        <Icon name="watch" size={24} color="#4F46E5" />
+        <Icon 
+          name="watch" 
+          size={24} 
+          color={item.isReal ? "#4F46E5" : "#9CA3AF"} 
+        />
       </View>
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.name || 'Unknown Device'}</Text>
+        <Text style={[
+          styles.deviceName,
+          !item.isReal && styles.deviceNameDisabled
+        ]}>
+          {item.name || 'Unknown Device'}
+        </Text>
         <Text style={styles.deviceDetails}>
-          {item.manufacturer || 'Unknown'} • Signal: {item.rssi || 'N/A'}
+          {item.manufacturer || 'Unknown'} • Signal: {item.rssi || 'N/A'} • {item.isReal ? 'VERIFIED' : 'NOT COMPATIBLE'}
         </Text>
         {item.batteryLevel && (
           <Text style={styles.deviceBattery}>Battery: {item.batteryLevel}%</Text>
         )}
+        {item.isReal && (
+          <Text style={styles.deviceRealIndicator}>✓ Real Device Detected</Text>
+        )}
       </View>
-      <Icon name="chevron-forward" size={16} color="#9CA3AF" />
+      <Icon 
+        name="chevron-forward" 
+        size={16} 
+        color={item.isReal ? "#4F46E5" : "#9CA3AF"} 
+      />
     </TouchableOpacity>
+  );
+
+  const renderNoDevicesFound = () => (
+    <View style={styles.noDevicesContainer}>
+      <Icon name="search" size={48} color="#9CA3AF" />
+      <Text style={styles.noDevicesTitle}>No Real Devices Found</Text>
+      <Text style={styles.noDevicesText}>
+        {scanAttempts === 0 
+          ? "No ET475 or compatible devices were detected nearby."
+          : `No real devices found after ${scanAttempts} scan${scanAttempts > 1 ? 's' : ''}.`
+        }
+      </Text>
+      <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
+      <Text style={styles.troubleshootingText}>
+        • Ensure your ET475 is in pairing/discoverable mode{'\n'}
+        • Make sure the device is charged and within range{'\n'}
+        • Check that Bluetooth is enabled on your phone{'\n'}
+        • Try turning your ET475 off and on again{'\n'}
+        • Ensure no other devices are connected to your ET475
+      </Text>
+    </View>
   );
 
   return (
@@ -227,7 +398,7 @@ export const HomeScreen = () => {
       
       {/* Main Content */}
       {!connectedDevice ? (
-        // Device Connection Screen
+        // Real Device Connection Screen
         <ScrollView 
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
@@ -252,14 +423,28 @@ export const HomeScreen = () => {
           <View style={styles.homeContent}>
             <View style={styles.connectDeviceCard}>
               <Icon name="bluetooth" size={48} color="#4F46E5" />
-              <Text style={styles.connectTitle}>Connect Your Device</Text>
+              <Text style={styles.connectTitle}>Connect Your Real Device</Text>
               <Text style={styles.connectDescription}>
-                Connect your smartwatch to start monitoring your health in real-time
+                Connect your ET475 or compatible smartwatch to start monitoring your actual health data in real-time. No demo data - only real measurements from your device.
               </Text>
+              
+              {hasBluetoothError && (
+                <View style={styles.errorContainer}>
+                  <Icon name="warning" size={20} color="#EF4444" />
+                  <Text style={styles.errorText}>
+                    Bluetooth Error: {bluetoothError}
+                  </Text>
+                </View>
+              )}
+              
+              {/* FIXED: Use boolean hasBluetoothError for disabled prop */}
               <TouchableOpacity 
-                style={styles.connectButton} 
+                style={[
+                  styles.connectButton,
+                  hasBluetoothError && styles.connectButtonDisabled
+                ]} 
                 onPress={startDeviceScan}
-                disabled={isScanning}
+                disabled={isScanning || hasBluetoothError}
               >
                 {isScanning ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -267,21 +452,27 @@ export const HomeScreen = () => {
                   <Icon name="bluetooth" size={20} color="#FFFFFF" />
                 )}
                 <Text style={styles.connectButtonText}>
-                  {isScanning ? 'Scanning...' : 'Scan for Devices'}
+                  {isScanning ? 'Scanning for Real Devices...' : 'Scan for Real Devices'}
                 </Text>
               </TouchableOpacity>
+              
+              {scanAttempts > 0 && (
+                <Text style={styles.scanAttemptsText}>
+                  Scan attempts: {scanAttempts}
+                </Text>
+              )}
             </View>
           </View>
         </ScrollView>
       ) : (
-        // Health Dashboard Screen (when device is connected)
+        // Health Dashboard Screen (when real device is connected)
         <View style={styles.dashboardContainer}>
-          {/* Connected Device Status Bar */}
+          {/* Connected Real Device Status Bar */}
           <View style={styles.connectedDeviceBar}>
             <View style={styles.connectedDeviceInfo}>
               <Icon name="bluetooth-connected" size={16} color="#10B981" />
               <Text style={styles.connectedDeviceText}>
-                {connectedDevice.name} Connected
+                {connectedDevice.name} Connected (Real Device)
               </Text>
             </View>
             <TouchableOpacity onPress={disconnectDevice} style={styles.disconnectButton}>
@@ -289,17 +480,17 @@ export const HomeScreen = () => {
             </TouchableOpacity>
           </View>
           
-          {/* Health Dashboard */}
+          {/* Health Dashboard with Real Data */}
           <HealthDashboard />
         </View>
       )}
 
-      {/* Device List Modal */}
+      {/* Real Device List Modal */}
       {showDeviceList && (
         <View style={styles.deviceListOverlay}>
           <View style={styles.deviceListContainer}>
             <View style={styles.deviceListHeader}>
-              <Text style={styles.deviceListTitle}>Available Devices</Text>
+              <Text style={styles.deviceListTitle}>Real Devices Found</Text>
               <TouchableOpacity 
                 onPress={() => {
                   setShowDeviceList(false);
@@ -313,33 +504,37 @@ export const HomeScreen = () => {
             {isScanning && (
               <View style={styles.scanningIndicator}>
                 <ActivityIndicator size="small" color="#4F46E5" />
-                <Text style={styles.scanningText}>Scanning for devices...</Text>
+                <Text style={styles.scanningText}>
+                  Scanning for real ET475 and compatible devices...
+                </Text>
               </View>
             )}
 
             <FlatList
               data={discoveredDevices}
-              renderItem={renderDeviceItem}
+              renderItem={renderRealDeviceItem}
               keyExtractor={(item) => item.id || item.address}
               style={styles.deviceList}
               ListEmptyComponent={
-                !isScanning ? (
-                  <Text style={styles.noDevicesText}>
-                    No devices found. Make sure your smartwatch is in pairing mode and try again.
-                  </Text>
-                ) : null
+                !isScanning ? renderNoDevicesFound() : null
               }
             />
 
-            <TouchableOpacity 
-              style={styles.rescanButton} 
-              onPress={startDeviceScan}
-              disabled={isScanning}
-            >
-              <Text style={styles.rescanButtonText}>
-                {isScanning ? 'Scanning...' : 'Scan Again'}
+            <View style={styles.deviceListFooter}>
+              <TouchableOpacity 
+                style={styles.rescanButton} 
+                onPress={startDeviceScan}
+                disabled={isScanning}
+              >
+                <Text style={styles.rescanButtonText}>
+                  {isScanning ? 'Scanning...' : 'Scan Again'}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.deviceListNote}>
+                Only real ET475 and compatible devices will be shown. Demo devices are not supported.
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -403,7 +598,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
-    minHeight: screenHeight * 0.25,
+    minHeight: screenHeight * 0.35,
     justifyContent: 'center',
   },
   connectTitle: {
@@ -422,6 +617,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     lineHeight: 20,
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+  },
   connectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,14 +641,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Math.max(screenWidth * 0.06, 24),
     paddingVertical: 12,
     borderRadius: 12,
-    minWidth: screenWidth * 0.4,
+    minWidth: screenWidth * 0.5,
     justifyContent: 'center',
+  },
+  connectButtonDisabled: {
+    backgroundColor: '#9CA3AF',
   },
   connectButtonText: {
     color: '#FFFFFF',
     marginLeft: 8,
     fontWeight: '600',
     fontSize: Math.min(screenWidth * 0.04, 16),
+  },
+  scanAttemptsText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
   },
   
   // Dashboard styles
@@ -447,11 +667,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#BBF7D0',
     paddingTop: Platform.OS === 'ios' ? 50 : 40,
   },
   connectedDeviceInfo: {
@@ -461,7 +681,7 @@ const styles = StyleSheet.create({
   connectedDeviceText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#10B981',
+    color: '#059669',
     fontWeight: '600',
   },
   disconnectButton: {
@@ -475,7 +695,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Math.max(screenWidth * 0.05, 20),
@@ -486,8 +706,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     width: '100%',
-    maxHeight: screenHeight * 0.7,
-    maxWidth: 400,
+    maxHeight: screenHeight * 0.8,
+    maxWidth: 450,
   },
   deviceListHeader: {
     flexDirection: 'row',
@@ -505,14 +725,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    marginBottom: 16,
   },
   scanningText: {
     marginLeft: 8,
-    color: '#4F46E5',
+    color: '#0369A1',
     fontSize: Math.min(screenWidth * 0.035, 14),
+    fontWeight: '500',
   },
   deviceList: {
-    maxHeight: screenHeight * 0.35,
+    maxHeight: screenHeight * 0.4,
   },
   deviceItem: {
     flexDirection: 'row',
@@ -520,6 +744,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  deviceItemDisabled: {
+    opacity: 0.5,
   },
   deviceIcon: {
     marginRight: 12,
@@ -532,6 +759,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
   },
+  deviceNameDisabled: {
+    color: '#9CA3AF',
+  },
   deviceDetails: {
     fontSize: Math.min(screenWidth * 0.03, 12),
     color: '#6B7280',
@@ -539,26 +769,67 @@ const styles = StyleSheet.create({
   },
   deviceBattery: {
     fontSize: Math.min(screenWidth * 0.03, 12),
-    color: '#10B981',
+    color: '#059669',
     marginTop: 2,
+  },
+  deviceRealIndicator: {
+    fontSize: Math.min(screenWidth * 0.03, 12),
+    color: '#059669',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  noDevicesContainer: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  noDevicesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
   },
   noDevicesText: {
     textAlign: 'center',
     color: '#6B7280',
-    fontSize: Math.min(screenWidth * 0.035, 14),
-    padding: 20,
+    fontSize: 14,
+    marginBottom: 16,
     lineHeight: 20,
+  },
+  troubleshootingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  troubleshootingText: {
+    textAlign: 'left',
+    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  deviceListFooter: {
+    marginTop: 16,
+    alignItems: 'center',
   },
   rescanButton: {
     backgroundColor: '#4F46E5',
     paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 16,
+    marginBottom: 12,
   },
   rescanButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: Math.min(screenWidth * 0.04, 16),
+  },
+  deviceListNote: {
+    fontSize: 11,
+    color: '#6B7280',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingHorizontal: 20,
   },
 });

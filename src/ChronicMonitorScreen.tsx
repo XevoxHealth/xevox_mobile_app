@@ -47,12 +47,12 @@ const LinearGradient = ({ colors, children, style, ...props }) => (
   </View>
 );
 
-// Mini chart component for showing trends
+// Mini chart component for showing real data trends only
 const MiniChart = ({ data, color, height = 40 }) => {
   if (!data || data.length === 0) {
     return (
       <View style={[styles.chartPlaceholder, { height }]}>
-        <Text style={styles.noChartText}>No data</Text>
+        <Text style={styles.noChartText}>No real data</Text>
       </View>
     );
   }
@@ -102,13 +102,16 @@ const RiskIndicator = ({ level }) => {
   );
 };
 
-// Chronic Condition Card Component
+// Chronic Condition Card Component - Real Data Only
 const ChronicConditionCard = ({ condition, onPress }) => {
-  const { name, description, riskLevel, keyMetrics, recommendations, color, icon } = condition;
+  const { name, description, riskLevel, keyMetrics, recommendations, color, icon, isRealData } = condition;
 
   return (
     <TouchableOpacity 
-      style={styles.conditionCard}
+      style={[
+        styles.conditionCard,
+        !isRealData && styles.conditionCardDisabled
+      ]}
       onPress={() => onPress(condition)}
       activeOpacity={0.7}
     >
@@ -116,52 +119,83 @@ const ChronicConditionCard = ({ condition, onPress }) => {
         <View style={[styles.cardIconContainer, { backgroundColor: color + '20' }]}>
           <Icon name={icon} size={24} color={color} />
         </View>
-        <RiskIndicator level={riskLevel} />
-      </View>
-
-      <Text style={styles.conditionName}>{name}</Text>
-      <Text style={styles.conditionDescription}>{description}</Text>
-
-      {/* Key Metrics */}
-      <View style={styles.metricsSection}>
-        <Text style={styles.metricsTitle}>Key Indicators</Text>
-        <View style={styles.metricsGrid}>
-          {keyMetrics.map((metric, index) => (
-            <View key={index} style={styles.metricItem}>
-              <Text style={styles.metricLabel}>{metric.name}</Text>
-              <Text style={[styles.metricValue, { color }]}>
-                {metric.value} {metric.unit}
-              </Text>
-              <Text style={styles.metricStatus}>{metric.status}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Mini Chart */}
-      {keyMetrics[0]?.history && (
-        <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>7-Day Trend</Text>
-          <MiniChart 
-            data={keyMetrics[0].history} 
-            color={color}
-            height={40}
-          />
-        </View>
-      )}
-
-      {/* Quick Recommendations */}
-      <View style={styles.recommendationsPreview}>
-        <Text style={styles.recommendationsTitle}>Recommendations</Text>
-        <Text style={styles.recommendationText}>
-          {recommendations[0]}
-        </Text>
-        {recommendations.length > 1 && (
-          <Text style={styles.moreRecommendations}>
-            +{recommendations.length - 1} more recommendations
-          </Text>
+        {isRealData ? (
+          <RiskIndicator level={riskLevel} />
+        ) : (
+          <View style={styles.noDataBadge}>
+            <Text style={styles.noDataBadgeText}>NO REAL DATA</Text>
+          </View>
         )}
       </View>
+
+      <Text style={[
+        styles.conditionName,
+        !isRealData && styles.conditionNameDisabled
+      ]}>
+        {name}
+      </Text>
+      <Text style={[
+        styles.conditionDescription,
+        !isRealData && styles.conditionDescriptionDisabled
+      ]}>
+        {isRealData ? description : 'Connect your ET475 to monitor this condition with real data'}
+      </Text>
+
+      {isRealData && keyMetrics && keyMetrics.length > 0 && (
+        <>
+          {/* Key Metrics */}
+          <View style={styles.metricsSection}>
+            <Text style={styles.metricsTitle}>Key Indicators (Real Data)</Text>
+            <View style={styles.metricsGrid}>
+              {keyMetrics.map((metric, index) => (
+                <View key={index} style={styles.metricItem}>
+                  <Text style={styles.metricLabel}>{metric.name}</Text>
+                  <Text style={[styles.metricValue, { color }]}>
+                    {metric.value} {metric.unit}
+                  </Text>
+                  <Text style={styles.metricStatus}>{metric.status}</Text>
+                  <Text style={styles.realDataIndicator}>✓ Real</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Mini Chart for Real Data */}
+          {keyMetrics[0]?.history && (
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>7-Day Real Data Trend</Text>
+              <MiniChart 
+                data={keyMetrics[0].history} 
+                color={color}
+                height={40}
+              />
+            </View>
+          )}
+
+          {/* Real Data Recommendations */}
+          <View style={styles.recommendationsPreview}>
+            <Text style={styles.recommendationsTitle}>Recommendations (Based on Real Data)</Text>
+            <Text style={styles.recommendationText}>
+              {recommendations[0]}
+            </Text>
+            {recommendations.length > 1 && (
+              <Text style={styles.moreRecommendations}>
+                +{recommendations.length - 1} more recommendations
+              </Text>
+            )}
+          </View>
+        </>
+      )}
+
+      {!isRealData && (
+        <View style={styles.noRealDataSection}>
+          <Icon name="warning" size={32} color="#F59E0B" />
+          <Text style={styles.noRealDataTitle}>Real Device Required</Text>
+          <Text style={styles.noRealDataText}>
+            Connect your ET475 or compatible smartwatch to monitor {name.toLowerCase()} with real health measurements.
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -171,7 +205,8 @@ export const ChronicMonitorsScreen = () => {
   const [healthData, setHealthData] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [hasConnectedDevice, setHasConnectedDevice] = useState(false);
+  const [hasRealDevice, setHasRealDevice] = useState(false);
+  const [realDataAvailable, setRealDataAvailable] = useState(false);
 
   useEffect(() => {
     loadHealthData();
@@ -181,15 +216,22 @@ export const ChronicMonitorsScreen = () => {
   const loadHealthData = async () => {
     try {
       setIsLoading(true);
-      console.log('Loading health data for chronic conditions analysis...');
+      console.log('Loading REAL health data for chronic conditions analysis...');
       
-      // Get health data from backend
       const data = await api.getHealthData('week');
       setHealthData(data);
       
+      const hasRealData = Object.keys(data).some(key => {
+        const metricData = data[key];
+        return metricData && typeof metricData === 'object' && metricData.is_real === true;
+      });
+      
+      setRealDataAvailable(hasRealData);
+      console.log('Real data available:', hasRealData);
+      
     } catch (error) {
-      console.error('Error loading health data:', error);
-      Alert.alert('Error', 'Failed to load health data');
+      console.error('Error loading REAL health data:', error);
+      Alert.alert('Error', 'Failed to load real health data. Please check your device connection.');
     } finally {
       setIsLoading(false);
     }
@@ -198,9 +240,11 @@ export const ChronicMonitorsScreen = () => {
   const checkDeviceStatus = async () => {
     try {
       const deviceStatus = await api.getConnectedDevices();
-      setHasConnectedDevice(deviceStatus.devices && deviceStatus.devices.length > 0);
+      const hasDevice = deviceStatus.devices && deviceStatus.devices.length > 0;
+      setHasRealDevice(hasDevice);
+      console.log('Real device connected:', hasDevice);
     } catch (error) {
-      console.error('Error checking device status:', error);
+      console.error('Error checking real device status:', error);
     }
   };
 
@@ -211,26 +255,30 @@ export const ChronicMonitorsScreen = () => {
     setRefreshing(false);
   };
 
-  // Analyze health data for chronic conditions
   const analyzeChronicConditions = () => {
     const conditions = [];
 
     // 1. CARDIOVASCULAR DISEASE
-    const heartRate = healthData.heartRate?.average || 75;
+    const heartRate = (healthData.heartRate?.is_real && healthData.heartRate?.average) || 0;
     const bloodPressure = {
-      systolic: healthData.bloodPressure?.current_systolic || 120,
-      diastolic: healthData.bloodPressure?.current_diastolic || 80
+      systolic: (healthData.bloodPressure?.is_real && healthData.bloodPressure?.current_systolic) || 0,
+      diastolic: (healthData.bloodPressure?.is_real && healthData.bloodPressure?.current_diastolic) || 0
     };
-    const steps = healthData.steps?.average || 5000;
+    const steps = (healthData.steps?.is_real && healthData.steps?.average) || 0;
 
-    const cvdRisk = calculateCVDRisk(heartRate, bloodPressure, steps);
+    const hasCardioRealData = heartRate > 0 || bloodPressure.systolic > 0 || steps > 0;
+    const cvdRisk = hasCardioRealData ? calculateCVDRisk(heartRate, bloodPressure, steps) : null;
+    
     conditions.push({
       name: 'Cardiovascular Disease',
-      description: 'Heart and blood vessel health monitoring',
-      riskLevel: cvdRisk.level,
+      description: hasCardioRealData 
+        ? 'Heart and blood vessel health monitoring based on real device data'
+        : 'Heart and blood vessel health monitoring',
+      riskLevel: cvdRisk?.level || 'unknown',
       color: '#EF4444',
       icon: 'heart',
-      keyMetrics: [
+      isRealData: hasCardioRealData,
+      keyMetrics: hasCardioRealData ? [
         {
           name: 'Heart Rate',
           value: Math.round(heartRate),
@@ -252,20 +300,30 @@ export const ChronicMonitorsScreen = () => {
           status: steps < 5000 ? 'Low' : steps > 10000 ? 'Excellent' : 'Good',
           history: healthData.steps?.values?.slice(-7) || []
         }
-      ],
-      recommendations: cvdRisk.recommendations
+      ] : [],
+      recommendations: cvdRisk?.recommendations || [
+        'Connect your ET475 to monitor cardiovascular health',
+        'Regular heart rate and blood pressure tracking needed'
+      ]
     });
 
     // 2. DIABETES
-    const glucose = healthData.bloodGlucose?.average || 95;
-    const diabetesRisk = calculateDiabetesRisk(glucose, steps);
+    const glucose = (healthData.bloodGlucose?.is_real && healthData.bloodGlucose?.average) || 0;
+    const realSteps = (healthData.steps?.is_real && healthData.steps?.average) || 0;
+    
+    const hasDiabetesRealData = glucose > 0 || realSteps > 0;
+    const diabetesRisk = hasDiabetesRealData ? calculateDiabetesRisk(glucose, realSteps) : null;
+    
     conditions.push({
       name: 'Diabetes',
-      description: 'Blood sugar and metabolic health',
-      riskLevel: diabetesRisk.level,
+      description: hasDiabetesRealData
+        ? 'Blood sugar and metabolic health based on real device measurements'
+        : 'Blood sugar and metabolic health monitoring',
+      riskLevel: diabetesRisk?.level || 'unknown',
       color: '#8B5CF6',
       icon: 'water',
-      keyMetrics: [
+      isRealData: hasDiabetesRealData,
+      keyMetrics: hasDiabetesRealData ? [
         {
           name: 'Blood Glucose',
           value: Math.round(glucose),
@@ -275,59 +333,83 @@ export const ChronicMonitorsScreen = () => {
         },
         {
           name: 'Physical Activity',
-          value: Math.round(steps),
+          value: Math.round(realSteps),
           unit: 'steps/day',
-          status: steps < 5000 ? 'Insufficient' : 'Adequate',
+          status: realSteps < 5000 ? 'Insufficient' : 'Adequate',
           history: healthData.steps?.values?.slice(-7) || []
         }
-      ],
-      recommendations: diabetesRisk.recommendations
+      ] : [],
+      recommendations: diabetesRisk?.recommendations || [
+        'Connect your ET475 to track blood glucose levels',
+        'Activity monitoring needed for diabetes prevention'
+      ]
     });
 
     // 3. HYPERTENSION
-    const hypertensionRisk = calculateHypertensionRisk(bloodPressure, healthData.stress?.average || 3);
+    const realBP = {
+      systolic: (healthData.bloodPressure?.is_real && healthData.bloodPressure?.current_systolic) || 0,
+      diastolic: (healthData.bloodPressure?.is_real && healthData.bloodPressure?.current_diastolic) || 0
+    };
+    const stress = (healthData.stress?.is_real && healthData.stress?.average) || 0;
+    
+    const hasHypertensionRealData = realBP.systolic > 0 || realBP.diastolic > 0 || stress > 0;
+    const hypertensionRisk = hasHypertensionRealData ? calculateHypertensionRisk(realBP, stress) : null;
+    
     conditions.push({
       name: 'Hypertension',
-      description: 'High blood pressure monitoring',
-      riskLevel: hypertensionRisk.level,
+      description: hasHypertensionRealData
+        ? 'High blood pressure monitoring with real device data'
+        : 'High blood pressure monitoring',
+      riskLevel: hypertensionRisk?.level || 'unknown',
       color: '#DC2626',
       icon: 'medical',
-      keyMetrics: [
+      isRealData: hasHypertensionRealData,
+      keyMetrics: hasHypertensionRealData ? [
         {
           name: 'Systolic BP',
-          value: Math.round(bloodPressure.systolic),
+          value: Math.round(realBP.systolic),
           unit: 'mmHg',
-          status: bloodPressure.systolic > 140 ? 'High' : bloodPressure.systolic > 120 ? 'Elevated' : 'Normal',
+          status: realBP.systolic > 140 ? 'High' : realBP.systolic > 120 ? 'Elevated' : 'Normal',
           history: []
         },
         {
           name: 'Diastolic BP',
-          value: Math.round(bloodPressure.diastolic),
+          value: Math.round(realBP.diastolic),
           unit: 'mmHg',
-          status: bloodPressure.diastolic > 90 ? 'High' : bloodPressure.diastolic > 80 ? 'Elevated' : 'Normal',
+          status: realBP.diastolic > 90 ? 'High' : realBP.diastolic > 80 ? 'Elevated' : 'Normal',
           history: []
         },
         {
           name: 'Stress Level',
-          value: Math.round(healthData.stress?.average || 3),
+          value: Math.round(stress),
           unit: '/10',
-          status: (healthData.stress?.average || 3) > 6 ? 'High' : 'Normal',
+          status: stress > 6 ? 'High' : 'Normal',
           history: healthData.stress?.values?.slice(-7) || []
         }
-      ],
-      recommendations: hypertensionRisk.recommendations
+      ] : [],
+      recommendations: hypertensionRisk?.recommendations || [
+        'Connect your ET475 to monitor blood pressure',
+        'Real-time stress tracking needed'
+      ]
     });
 
     // 4. CHRONIC RESPIRATORY DISEASES
-    const oxygenSat = healthData.oxygenSaturation?.average || 98;
-    const respiratoryRisk = calculateRespiratoryRisk(oxygenSat, heartRate);
+    const oxygenSat = (healthData.oxygenSaturation?.is_real && healthData.oxygenSaturation?.average) || 0;
+    const realHeartRate = (healthData.heartRate?.is_real && healthData.heartRate?.average) || 0;
+    
+    const hasRespiratoryRealData = oxygenSat > 0 || realHeartRate > 0;
+    const respiratoryRisk = hasRespiratoryRealData ? calculateRespiratoryRisk(oxygenSat, realHeartRate) : null;
+    
     conditions.push({
       name: 'Chronic Respiratory Diseases',
-      description: 'Lung function and breathing health',
-      riskLevel: respiratoryRisk.level,
+      description: hasRespiratoryRealData
+        ? 'Lung function and breathing health based on real measurements'
+        : 'Lung function and breathing health monitoring',
+      riskLevel: respiratoryRisk?.level || 'unknown',
       color: '#22C55E',
       icon: 'leaf',
-      keyMetrics: [
+      isRealData: hasRespiratoryRealData,
+      keyMetrics: hasRespiratoryRealData ? [
         {
           name: 'Oxygen Saturation',
           value: Math.round(oxygenSat),
@@ -337,30 +419,40 @@ export const ChronicMonitorsScreen = () => {
         },
         {
           name: 'Resting Heart Rate',
-          value: Math.round(heartRate),
+          value: Math.round(realHeartRate),
           unit: 'bpm',
-          status: heartRate > 100 ? 'Elevated' : 'Normal',
+          status: realHeartRate > 100 ? 'Elevated' : 'Normal',
           history: healthData.heartRate?.values?.slice(-7) || []
         }
-      ],
-      recommendations: respiratoryRisk.recommendations
+      ] : [],
+      recommendations: respiratoryRisk?.recommendations || [
+        'Connect your ET475 to monitor oxygen saturation',
+        'Real respiratory data needed for assessment'
+      ]
     });
 
     // 5. OBESITY AND METABOLIC SYNDROME
-    const calories = healthData.caloriesBurned?.average || 2000;
-    const metabolicRisk = calculateMetabolicRisk(steps, calories);
+    const calories = (healthData.caloriesBurned?.is_real && healthData.caloriesBurned?.average) || 0;
+    const activitySteps = (healthData.steps?.is_real && healthData.steps?.average) || 0;
+    
+    const hasMetabolicRealData = activitySteps > 0 || calories > 0;
+    const metabolicRisk = hasMetabolicRealData ? calculateMetabolicRisk(activitySteps, calories) : null;
+    
     conditions.push({
       name: 'Obesity & Metabolic Syndrome',
-      description: 'Weight management and metabolism',
-      riskLevel: metabolicRisk.level,
+      description: hasMetabolicRealData
+        ? 'Weight management and metabolism based on real activity data'
+        : 'Weight management and metabolism monitoring',
+      riskLevel: metabolicRisk?.level || 'unknown',
       color: '#F97316',
       icon: 'fitness',
-      keyMetrics: [
+      isRealData: hasMetabolicRealData,
+      keyMetrics: hasMetabolicRealData ? [
         {
           name: 'Daily Steps',
-          value: Math.round(steps),
+          value: Math.round(activitySteps),
           unit: 'steps',
-          status: steps < 5000 ? 'Low' : steps > 10000 ? 'Excellent' : 'Good',
+          status: activitySteps < 5000 ? 'Low' : activitySteps > 10000 ? 'Excellent' : 'Good',
           history: healthData.steps?.values?.slice(-7) || []
         },
         {
@@ -372,13 +464,16 @@ export const ChronicMonitorsScreen = () => {
         },
         {
           name: 'Activity Level',
-          value: Math.round((steps / 10000) * 100),
+          value: Math.round((activitySteps / 10000) * 100),
           unit: '%',
-          status: steps < 5000 ? 'Inactive' : steps > 10000 ? 'Active' : 'Moderate',
+          status: activitySteps < 5000 ? 'Inactive' : activitySteps > 10000 ? 'Active' : 'Moderate',
           history: []
         }
-      ],
-      recommendations: metabolicRisk.recommendations
+      ] : [],
+      recommendations: metabolicRisk?.recommendations || [
+        'Connect your ET475 to track daily activity',
+        'Real calorie and step data needed for assessment'
+      ]
     });
 
     return conditions;
@@ -397,12 +492,12 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
-        'Regular cardiovascular exercise (30 min/day)',
-        'Monitor blood pressure daily',
+        'Regular cardiovascular exercise (30 min/day) - tracked by your device',
+        'Monitor blood pressure daily with your ET475',
         'Maintain a low-sodium diet',
-        'Manage stress through meditation',
-        'Get adequate sleep (7-9 hours)',
-        'Quit smoking if applicable'
+        'Continue real-time heart rate monitoring',
+        'Get adequate sleep (7-9 hours) - track with device',
+        'Use device stress monitoring to manage stress levels'
       ]
     };
   };
@@ -419,12 +514,12 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
-        'Monitor blood glucose regularly',
+        'Monitor blood glucose regularly with compatible devices',
         'Follow a balanced, low-sugar diet',
-        'Exercise regularly to improve insulin sensitivity',
+        'Exercise regularly - track progress with your device',
         'Maintain a healthy weight',
-        'Stay hydrated throughout the day',
-        'Limit processed foods and refined carbs'
+        'Continue activity tracking with ET475',
+        'Use device data to correlate activity with glucose levels'
       ]
     };
   };
@@ -443,12 +538,12 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
-        'Reduce sodium intake (<2300mg/day)',
-        'Practice stress management techniques',
-        'Maintain regular sleep schedule',
-        'Exercise regularly but avoid intense workouts',
+        'Monitor blood pressure twice daily with your device',
+        'Use device stress tracking to identify triggers',
+        'Maintain regular sleep schedule - track with ET475',
+        'Exercise regularly but monitor heart rate',
         'Limit alcohol consumption',
-        'Monitor blood pressure twice daily'
+        'Track correlations between stress and blood pressure'
       ]
     };
   };
@@ -465,12 +560,12 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
+        'Monitor oxygen saturation regularly with your device',
         'Practice deep breathing exercises',
         'Avoid air pollutants and allergens',
-        'Stay up to date with vaccinations',
-        'Exercise regularly to improve lung capacity',
-        'Maintain good indoor air quality',
-        'Consider pulmonary rehabilitation if needed'
+        'Exercise regularly to improve lung capacity - track with device',
+        'Continue heart rate monitoring during activities',
+        'Use device data to track breathing patterns'
       ]
     };
   };
@@ -486,35 +581,60 @@ export const ChronicMonitorsScreen = () => {
     return {
       level,
       recommendations: [
-        'Aim for 10,000 steps daily',
+        'Aim for 10,000 steps daily - track with your ET475',
         'Follow a balanced Mediterranean diet',
         'Include strength training 2-3x/week',
-        'Monitor portion sizes',
-        'Stay consistent with meal timing',
-        'Focus on whole foods over processed options'
+        'Monitor daily calorie burn with device',
+        'Use activity data to set realistic goals',
+        'Track sleep quality impact on metabolism with device'
       ]
     };
   };
 
   const handleConditionPress = (condition) => {
-    const detailsText = `${condition.name}\n\nRisk Level: ${condition.riskLevel.toUpperCase()}\n\n${condition.description}\n\nKey Metrics:\n${condition.keyMetrics.map(m => `• ${m.name}: ${m.value} ${m.unit} (${m.status})`).join('\n')}\n\nRecommendations:\n${condition.recommendations.slice(0, 3).map(r => `• ${r}`).join('\n')}`;
+    if (!condition.isRealData) {
+      Alert.alert(
+        'Real Device Required',
+        `To monitor ${condition.name}, you need to connect your ET475 or compatible smartwatch.\n\nReal health measurements are required for accurate chronic condition monitoring.`,
+        [
+          { text: 'OK' },
+          { text: 'Learn More', onPress: () => {
+            Alert.alert(
+              'Why Real Data Matters',
+              'Chronic condition monitoring requires accurate, real-time health measurements from your actual device. Demo data cannot provide the precision needed for health analysis.\n\nConnect your ET475 to get:\n• Real heart rate monitoring\n• Actual blood pressure readings\n• True activity levels\n• Accurate sleep data',
+              [{ text: 'Understood' }]
+            );
+          }}
+        ]
+      );
+      return;
+    }
+
+    const detailsText = `${condition.name}\n\nRisk Level: ${condition.riskLevel.toUpperCase()}\n\n${condition.description}\n\nKey Metrics (Real Data):\n${condition.keyMetrics.map(m => `• ${m.name}: ${m.value} ${m.unit} (${m.status})`).join('\n')}\n\nRecommendations:\n${condition.recommendations.slice(0, 3).map(r => `• ${r}`).join('\n')}\n\n✓ Based on real device measurements`;
     
-    Alert.alert(condition.name, detailsText, [{ text: 'OK' }]);
+    Alert.alert(`${condition.name} (Real Data)`, detailsText, [{ text: 'OK' }]);
   };
 
   const renderNoDeviceState = () => (
     <View style={styles.noDeviceContainer}>
       <Icon name="watch" size={64} color="#9CA3AF" />
-      <Text style={styles.noDeviceTitle}>Connect Your Smartwatch</Text>
+      <Text style={styles.noDeviceTitle}>Connect Your Real ET475 Device</Text>
       <Text style={styles.noDeviceDescription}>
-        Connect your smartwatch to monitor chronic conditions and get personalized health insights based on real-time data.
+        Connect your ET475 or compatible smartwatch to monitor chronic conditions with real health data. Demo data is not supported for medical monitoring.
       </Text>
+      <View style={styles.benefitsList}>
+        <Text style={styles.benefitsTitle}>Real Device Benefits:</Text>
+        <Text style={styles.benefitItem}>• Accurate heart rate and blood pressure readings</Text>
+        <Text style={styles.benefitItem}>• Real activity and sleep tracking</Text>
+        <Text style={styles.benefitItem}>• Precise health trend analysis</Text>
+        <Text style={styles.benefitItem}>• Reliable chronic condition monitoring</Text>
+      </View>
       <TouchableOpacity 
         style={styles.connectDeviceButton}
-        onPress={() => Alert.alert('Connect Device', 'Go to the Home screen to connect your smartwatch')}
+        onPress={() => Alert.alert('Connect Device', 'Go to the Home screen to connect your real ET475 or compatible smartwatch')}
       >
         <Icon name="bluetooth" size={20} color="#FFFFFF" />
-        <Text style={styles.connectDeviceText}>Connect Device</Text>
+        <Text style={styles.connectDeviceText}>Connect Real Device</Text>
       </TouchableOpacity>
     </View>
   );
@@ -522,7 +642,7 @@ export const ChronicMonitorsScreen = () => {
   const renderLoadingState = () => (
     <View style={styles.loadingContainer}>
       <ActivityIndicator size="large" color="#4F46E5" />
-      <Text style={styles.loadingText}>Analyzing your health data...</Text>
+      <Text style={styles.loadingText}>Analyzing your real health data...</Text>
     </View>
   );
 
@@ -534,7 +654,7 @@ export const ChronicMonitorsScreen = () => {
     );
   }
 
-  if (!hasConnectedDevice) {
+  if (!hasRealDevice) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
@@ -543,7 +663,7 @@ export const ChronicMonitorsScreen = () => {
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Chronic Conditions Monitor</Text>
-            <Text style={styles.headerSubtitle}>5 Key Health Areas</Text>
+            <Text style={styles.headerSubtitle}>Real Device Data Required</Text>
           </View>
         </LinearGradient>
         {renderNoDeviceState()}
@@ -552,6 +672,7 @@ export const ChronicMonitorsScreen = () => {
   }
 
   const conditions = analyzeChronicConditions();
+  const realConditionsCount = conditions.filter(c => c.isRealData).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -563,7 +684,10 @@ export const ChronicMonitorsScreen = () => {
           <View>
             <Text style={styles.headerTitle}>Chronic Conditions Monitor</Text>
             <Text style={styles.headerSubtitle}>
-              Based on your real-time health data
+              {realDataAvailable 
+                ? `${realConditionsCount} conditions with real data`
+                : 'Real device connected, waiting for data'
+              }
             </Text>
           </View>
           <TouchableOpacity onPress={onRefresh} disabled={isLoading}>
@@ -583,11 +707,23 @@ export const ChronicMonitorsScreen = () => {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Health Overview</Text>
           <Text style={styles.summaryText}>
-            Monitoring 5 key chronic conditions based on your real-time health metrics from your connected smartwatch.
+            {realDataAvailable 
+              ? `Monitoring 5 key chronic conditions based on your real health metrics from your connected device. ${realConditionsCount} conditions have real data available.`
+              : 'Your device is connected but waiting for real health data. Make sure your ET475 is actively collecting measurements.'
+            }
           </Text>
           <Text style={styles.lastUpdated}>
             Last updated: {new Date().toLocaleString()}
           </Text>
+          
+          {!realDataAvailable && hasRealDevice && (
+            <View style={styles.waitingForDataNotice}>
+              <Icon name="clock" size={20} color="#F59E0B" />
+              <Text style={styles.waitingForDataText}>
+                Device connected. Waiting for real health measurements to begin chronic condition analysis.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.conditionsGrid}>
@@ -603,8 +739,8 @@ export const ChronicMonitorsScreen = () => {
         <View style={styles.disclaimerCard}>
           <Icon name="information" size={20} color="#6B7280" />
           <Text style={styles.disclaimerText}>
-            This analysis is based on your smartwatch data and general health guidelines. 
-            Always consult with healthcare professionals for medical advice and diagnosis.
+            This analysis is based on real health data from your connected ET475 device and general health guidelines. 
+            Always consult with healthcare professionals for medical advice and diagnosis. Demo data is not used in this analysis.
           </Text>
         </View>
       </ScrollView>
@@ -647,7 +783,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingTop: 20,
     paddingHorizontal: 20,
-    paddingBottom: 120, // Extra padding for tab bar to avoid conflicts
+    paddingBottom: 120,
   },
   loadingContainer: {
     flex: 1,
@@ -673,6 +809,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   noDeviceDescription: {
     fontSize: 14,
@@ -680,6 +817,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
+  },
+  benefitsList: {
+    marginBottom: 24,
+    alignSelf: 'stretch',
+  },
+  benefitsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  benefitItem: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 4,
   },
   connectDeviceButton: {
     flexDirection: 'row',
@@ -721,6 +873,23 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 8,
   },
+  waitingForDataNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  waitingForDataText: {
+    fontSize: 12,
+    color: '#92400E',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
   conditionsGrid: {
     marginBottom: 20,
   },
@@ -734,6 +903,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  conditionCardDisabled: {
+    opacity: 0.7,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    borderStyle: 'dashed',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -758,16 +933,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  noDataBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#F59E0B',
+  },
+  noDataBadgeText: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
   conditionName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 4,
   },
+  conditionNameDisabled: {
+    color: '#9CA3AF',
+  },
   conditionDescription: {
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 16,
+  },
+  conditionDescriptionDisabled: {
+    color: '#9CA3AF',
   },
   metricsSection: {
     marginBottom: 16,
@@ -799,6 +991,12 @@ const styles = StyleSheet.create({
   metricStatus: {
     fontSize: 10,
     color: '#9CA3AF',
+  },
+  realDataIndicator: {
+    fontSize: 9,
+    color: '#10B981',
+    fontWeight: 'bold',
+    marginTop: 2,
   },
   chartSection: {
     marginBottom: 16,
@@ -850,6 +1048,23 @@ const styles = StyleSheet.create({
     color: '#4F46E5',
     marginTop: 4,
     fontWeight: '500',
+  },
+  noRealDataSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noRealDataTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  noRealDataText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   disclaimerCard: {
     flexDirection: 'row',

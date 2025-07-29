@@ -1,4 +1,4 @@
-// HealthDashboard.tsx - Fixed sync status and added ECG metrics
+// Fixed HealthDashboard.tsx - Real Device Data Only, No Demo Data
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -49,10 +49,21 @@ const LinearGradient = ({ colors, children, style, ...props }) => (
   </View>
 );
 
-// Simple line chart component
+// Simple line chart component for real data
 const MiniLineChart = ({ data, color, width = 80, height = 30 }) => {
   if (!data || data.length === 0) {
-    return <View style={{ width, height, backgroundColor: '#f0f0f0', borderRadius: 4 }} />;
+    return (
+      <View style={{ 
+        width, 
+        height, 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: 4,
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}>
+        <Text style={{ fontSize: 9, color: '#9CA3AF' }}>No data</Text>
+      </View>
+    );
   }
 
   const max = Math.max(...data);
@@ -85,16 +96,21 @@ const MiniLineChart = ({ data, color, width = 80, height = 30 }) => {
   );
 };
 
-// Metric card component with better data detection
-const MetricCard = ({ metric, data, onPress }) => {
+// Metric card component - ONLY shows real data
+const MetricCard = ({ metric, data, onPress, isUserAuthenticated }) => {
   const getDisplayValue = () => {
+    // Only process if this is real data
+    if (!data.is_real) {
+      return 'No real data';
+    }
+
     if (metric.key === 'bloodPressure') {
       const systolic = data.current_systolic || 0;
       const diastolic = data.current_diastolic || 0;
       if (systolic > 0 || diastolic > 0) {
         return `${Math.round(systolic)}/${Math.round(diastolic)}`;
       }
-      return '0/0';
+      return 'No reading';
     } else if (metric.key === 'sleep') {
       const duration = data.current_duration || data.average || 0;
       if (duration > 0) {
@@ -102,17 +118,19 @@ const MetricCard = ({ metric, data, onPress }) => {
         const minutes = Math.round((duration - hours) * 60);
         return `${hours}h ${minutes}m`;
       }
-      return '0h 0m';
+      return 'No sleep data';
     } else {
       const value = data.current_value || data.average || 0;
       if (value > 0) {
         return Math.round(value).toLocaleString();
       }
-      return '0';
+      return 'No measurement';
     }
   };
 
   const getStatusColor = () => {
+    if (!data.is_real) return '#9CA3AF';
+    
     const status = data.status || 'normal';
     switch (status) {
       case 'low': return '#F59E0B';
@@ -123,8 +141,10 @@ const MetricCard = ({ metric, data, onPress }) => {
     }
   };
 
-  // Enhanced data detection
-  const hasData = () => {
+  // Enhanced real data detection
+  const hasRealData = () => {
+    if (!data.is_real) return false;
+    
     if (metric.key === 'bloodPressure') {
       return (data.current_systolic > 0 || data.current_diastolic > 0);
     } else if (metric.key === 'sleep') {
@@ -134,12 +154,19 @@ const MetricCard = ({ metric, data, onPress }) => {
     }
   };
 
-  const dataExists = hasData();
+  const realDataExists = hasRealData();
   const lastUpdated = data.last_updated;
 
   return (
     <TouchableOpacity 
-      style={[styles.metricCard, { opacity: dataExists ? 1 : 0.6 }]}
+      style={[
+        styles.metricCard, 
+        { 
+          opacity: realDataExists ? 1 : 0.5,
+          borderWidth: realDataExists ? 2 : 1,
+          borderColor: realDataExists ? metric.color + '40' : '#E5E7EB'
+        }
+      ]}
       onPress={() => onPress(metric, data)}
       activeOpacity={0.7}
     >
@@ -151,12 +178,20 @@ const MetricCard = ({ metric, data, onPress }) => {
       </View>
       
       <Text style={styles.metricLabel}>{metric.label}</Text>
-      <Text style={[styles.metricValue, { color: metric.color }]}>
+      <Text style={[
+        styles.metricValue, 
+        { 
+          color: realDataExists ? metric.color : '#9CA3AF',
+          fontSize: realDataExists ? 18 : 14
+        }
+      ]}>
         {getDisplayValue()}
       </Text>
-      <Text style={styles.metricUnit}>{metric.unit}</Text>
+      <Text style={styles.metricUnit}>
+        {realDataExists ? metric.unit : (data.is_real ? 'Device connected' : 'Connect ET475')}
+      </Text>
       
-      {dataExists && data.values && data.values.length > 1 && (
+      {realDataExists && data.values && data.values.length > 1 && (
         <View style={styles.chartContainer}>
           <MiniLineChart 
             data={data.values.slice(-10)} 
@@ -167,33 +202,48 @@ const MetricCard = ({ metric, data, onPress }) => {
         </View>
       )}
       
-      {dataExists && lastUpdated && (
+      {realDataExists && lastUpdated && (
         <Text style={styles.lastUpdatedText}>
-          {new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          Real data: {new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       )}
       
-      {!dataExists && (
-        <Text style={styles.noDataText}>No data</Text>
+      {!realDataExists && (
+        <Text style={styles.noDataText}>
+          {!isUserAuthenticated 
+            ? 'Login required' 
+            : (!data.is_real 
+                ? 'Connect real device' 
+                : 'Waiting for data...'
+              )
+          }
+        </Text>
+      )}
+      
+      {data.is_real && realDataExists && (
+        <View style={styles.realDataBadge}>
+          <Text style={styles.realDataBadgeText}>✓ REAL</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
 };
 
-// Main dashboard component
+// Main dashboard component - ONLY shows real data
 export const HealthDashboard = () => {
   const { authState } = useAuth();
   const [healthData, setHealthData] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [timeframe, setTimeframe] = useState('day');
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [realDataAvailable, setRealDataAvailable] = useState(false);
 
-  // EXPANDED Health metrics configuration - Added ECG and more
+  // Health metrics configuration - only real metrics
   const healthMetrics = [
     { key: 'steps', label: 'Steps', icon: 'walk', unit: 'steps', color: '#10B981' },
     { key: 'heartRate', label: 'Heart Rate', icon: 'heart', unit: 'bpm', color: '#EF4444' },
-    { key: 'ecg', label: 'ECG', icon: 'pulse', unit: 'bpm', color: '#8B5CF6' }, // Added ECG
+    { key: 'ecg', label: 'ECG', icon: 'pulse', unit: 'bpm', color: '#8B5CF6' },
     { key: 'sleep', label: 'Sleep', icon: 'bed', unit: 'hrs', color: '#8B5CF6' },
     { key: 'bloodPressure', label: 'Blood Pressure', icon: 'medical', unit: 'mmHg', color: '#DC2626' },
     { key: 'oxygenSaturation', label: 'SpO2', icon: 'leaf', unit: '%', color: '#22C55E' },
@@ -207,60 +257,116 @@ export const HealthDashboard = () => {
   ];
 
   useEffect(() => {
-    if (authState.authenticated) {
+    // Only fetch data if user is authenticated and not logging out
+    if (authState.authenticated && !authState.isLoggingOut) {
       fetchHealthData();
+    } else {
+      // Clear data if user is not authenticated
+      setHealthData({});
+      setLastSyncTime(null);
+      setRealDataAvailable(false);
+      setIsLoading(false);
     }
-  }, [authState.authenticated, timeframe]);
+  }, [authState.authenticated, authState.isLoggingOut, timeframe]);
 
   const fetchHealthData = async () => {
+    // Double check authentication state
+    if (!authState.authenticated || authState.isLoggingOut) {
+      console.log('👤 User not authenticated, skipping health data fetch');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      console.log('📊 Fetching health data from API...');
+      console.log('📊 Fetching REAL health data from API...');
       
       const data = await api.getHealthData(timeframe);
       console.log('📊 Received health data:', Object.keys(data));
-      console.log('📊 Full health data:', JSON.stringify(data, null, 2));
+      
+      // Validate that we received real data
+      const hasRealData = Object.keys(data).some(key => {
+        const metricData = data[key];
+        return metricData && typeof metricData === 'object' && metricData.is_real === true;
+      });
       
       setHealthData(data);
+      setRealDataAvailable(hasRealData);
       
-      // Check for last sync time from metadata or any metric
-      const metadata = data._metadata;
-      if (metadata && metadata.retrieved_at) {
-        setLastSyncTime(metadata.retrieved_at);
-      } else {
-        // Find the most recent timestamp from any metric
-        let latestTime = null;
-        Object.keys(data).forEach(key => {
-          if (data[key] && typeof data[key] === 'object' && data[key].last_updated) {
-            const updateTime = new Date(data[key].last_updated);
-            if (!latestTime || updateTime > latestTime) {
-              latestTime = updateTime;
+      if (hasRealData) {
+        console.log('✅ Real device data detected');
+        
+        // Check for last sync time from metadata or any metric
+        const metadata = data._metadata;
+        if (metadata && metadata.retrieved_at) {
+          setLastSyncTime(metadata.retrieved_at);
+        } else {
+          // Find the most recent timestamp from any real metric
+          let latestTime = null;
+          Object.keys(data).forEach(key => {
+            if (data[key] && typeof data[key] === 'object' && data[key].is_real && data[key].last_updated) {
+              const updateTime = new Date(data[key].last_updated);
+              if (!latestTime || updateTime > latestTime) {
+                latestTime = updateTime;
+              }
             }
+          });
+          if (latestTime) {
+            setLastSyncTime(latestTime.toISOString());
           }
-        });
-        if (latestTime) {
-          setLastSyncTime(latestTime.toISOString());
         }
+      } else {
+        console.log('⚠️ No real device data found');
+        setLastSyncTime(null);
       }
       
     } catch (error) {
-      console.error('❌ Error fetching health data:', error);
-      Alert.alert('Error', 'Failed to fetch health data. Please try again.');
+      console.error('❌ Error fetching REAL health data:', error);
+      
+      // Only show error if user is still authenticated
+      if (authState.authenticated && !authState.isLoggingOut) {
+        Alert.alert(
+          'Data Fetch Error', 
+          'Failed to fetch your real health data. Please check your device connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        console.log('👤 User logged out during health data fetch, ignoring error');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const onRefresh = async () => {
+    if (!authState.authenticated || authState.isLoggingOut) {
+      console.log('👤 User not authenticated, skipping refresh');
+      return;
+    }
+
     setRefreshing(true);
     await fetchHealthData();
     setRefreshing(false);
   };
 
   const handleMetricPress = (metric, data) => {
+    if (!authState.authenticated) {
+      Alert.alert('Login Required', 'Please log in to view detailed health metrics.');
+      return;
+    }
+
     console.log(`📊 Pressed ${metric.label}:`, data);
     
-    // Show detailed info
+    // Check if this is real data
+    if (!data.is_real) {
+      Alert.alert(
+        'Real Device Required',
+        `${metric.label} data is not available.\n\nConnect your ET475 or compatible smartwatch to start tracking real ${metric.label.toLowerCase()} measurements.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    // Show detailed info for real data
     const hasData = metric.key === 'bloodPressure' 
       ? (data.current_systolic > 0 || data.current_diastolic > 0)
       : (data.current_value > 0 || data.average > 0);
@@ -268,22 +374,34 @@ export const HealthDashboard = () => {
     if (hasData) {
       let message = `${metric.label}: ${metric.key === 'bloodPressure' 
         ? `${Math.round(data.current_systolic || 0)}/${Math.round(data.current_diastolic || 0)} ${metric.unit}`
-        : `${Math.round(data.current_value || data.average || 0)} ${metric.unit}`}\n\nStatus: ${data.status || 'normal'}`;
+        : `${Math.round(data.current_value || data.average || 0)} ${metric.unit}`}\n\nStatus: ${data.status || 'normal'}\n\nData Source: Real Device ✓`;
       
       if (data.last_updated) {
-        message += `\n\nLast updated: ${new Date(data.last_updated).toLocaleString()}`;
+        message += `\n\nLast reading: ${new Date(data.last_updated).toLocaleString()}`;
       }
       
-      Alert.alert(metric.label, message);
+      Alert.alert(`${metric.label} (Real Data)`, message);
     } else {
-      Alert.alert(metric.label, 'No data available yet. Connect your smartwatch to start tracking this metric.');
+      Alert.alert(
+        `${metric.label} - Device Connected`,
+        'Your device is connected but no recent measurements are available for this metric. Make sure your device is actively collecting data and try syncing again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
   const getOverallHealthStatus = () => {
-    const metricsWithData = healthMetrics.filter(metric => {
+    if (!authState.authenticated) {
+      return { status: 'Login Required', color: '#6B7280' };
+    }
+
+    if (!realDataAvailable) {
+      return { status: 'Connect Real Device', color: '#F59E0B' };
+    }
+
+    const realMetricsWithData = healthMetrics.filter(metric => {
       const data = healthData[metric.key];
-      if (!data) return false;
+      if (!data || !data.is_real) return false;
       
       if (metric.key === 'bloodPressure') {
         return (data.current_systolic > 0 || data.current_diastolic > 0);
@@ -294,29 +412,35 @@ export const HealthDashboard = () => {
       }
     });
 
-    if (metricsWithData.length === 0) return { status: 'No Data', color: '#6B7280' };
+    if (realMetricsWithData.length === 0) {
+      return { status: 'Waiting for Data', color: '#6B7280' };
+    }
 
-    const normalCount = metricsWithData.filter(metric => {
+    const normalCount = realMetricsWithData.filter(metric => {
       const status = healthData[metric.key]?.status;
       return status === 'normal';
     }).length;
 
-    const percentage = (normalCount / metricsWithData.length) * 100;
+    const percentage = (normalCount / realMetricsWithData.length) * 100;
 
     if (percentage >= 80) return { status: 'Excellent', color: '#10B981' };
     if (percentage >= 60) return { status: 'Good', color: '#F59E0B' };
     return { status: 'Needs Attention', color: '#EF4444' };
   };
 
-  // Enhanced sync status detection
+  // Enhanced sync status detection for real data only
   const getSyncStatus = () => {
-    if (!healthData || Object.keys(healthData).length === 0) {
-      return { status: 'Not Synced', color: '#EF4444', message: 'No data available' };
+    if (!authState.authenticated) {
+      return { status: 'Not Logged In', color: '#6B7280', message: 'Login required' };
     }
 
-    const metricsWithData = healthMetrics.filter(metric => {
+    if (!realDataAvailable) {
+      return { status: 'No Real Device', color: '#EF4444', message: 'Connect ET475 or compatible device' };
+    }
+
+    const realMetricsWithData = healthMetrics.filter(metric => {
       const data = healthData[metric.key];
-      if (!data) return false;
+      if (!data || !data.is_real) return false;
       
       if (metric.key === 'bloodPressure') {
         return (data.current_systolic > 0 || data.current_diastolic > 0);
@@ -327,8 +451,8 @@ export const HealthDashboard = () => {
       }
     });
 
-    if (metricsWithData.length === 0) {
-      return { status: 'Not Synced', color: '#EF4444', message: 'No health data found' };
+    if (realMetricsWithData.length === 0) {
+      return { status: 'Device Connected', color: '#F59E0B', message: 'Waiting for real data' };
     }
 
     // Check if data is recent (within last 24 hours)
@@ -338,39 +462,42 @@ export const HealthDashboard = () => {
       const hoursSinceSync = (now - syncTime) / (1000 * 60 * 60);
       
       if (hoursSinceSync < 1) {
-        return { status: 'Synced', color: '#10B981', message: 'Recently synced' };
+        return { status: 'Live Data', color: '#10B981', message: 'Real-time sync' };
       } else if (hoursSinceSync < 24) {
-        return { status: 'Synced', color: '#10B981', message: `${Math.round(hoursSinceSync)}h ago` };
+        return { status: 'Recent Data', color: '#10B981', message: `${Math.round(hoursSinceSync)}h ago` };
       } else {
-        return { status: 'Stale Data', color: '#F59E0B', message: 'Data is old' };
+        return { status: 'Data Outdated', color: '#F59E0B', message: 'Sync your device' };
       }
     }
 
-    return { status: 'Synced', color: '#10B981', message: `${metricsWithData.length} metrics available` };
+    return { status: 'Real Data Active', color: '#10B981', message: `${realMetricsWithData.length} metrics available` };
   };
 
+  // Show appropriate message based on authentication state
   if (!authState.authenticated) {
     return (
       <View style={styles.centerContainer}>
+        <Icon name="person" size={64} color="#9CA3AF" />
         <Text style={styles.errorText}>Please log in to view your health data</Text>
+        <Text style={styles.errorSubtext}>Connect your account to access real health insights from your ET475 device</Text>
       </View>
     );
   }
 
-  if (isLoading) {
+  if (isLoading && Object.keys(healthData).length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>Loading your health data...</Text>
+        <Text style={styles.loadingText}>Loading your real health data...</Text>
       </View>
     );
   }
 
   const overallStatus = getOverallHealthStatus();
   const syncStatus = getSyncStatus();
-  const metricsWithData = healthMetrics.filter(metric => {
+  const realMetricsWithData = healthMetrics.filter(metric => {
     const data = healthData[metric.key];
-    if (!data) return false;
+    if (!data || !data.is_real) return false;
     
     if (metric.key === 'bloodPressure') {
       return (data.current_systolic > 0 || data.current_diastolic > 0);
@@ -390,9 +517,9 @@ export const HealthDashboard = () => {
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.headerTitle}>Health Dashboard</Text>
+            <Text style={styles.headerTitle}>Real Health Dashboard</Text>
             <Text style={styles.headerSubtitle}>
-              {authState.user?.name || 'User'}'s Health Metrics
+              {authState.user?.name || 'User'}'s Live Health Metrics
             </Text>
           </View>
           <View style={styles.statusContainer}>
@@ -436,13 +563,18 @@ export const HealthDashboard = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Summary Stats */}
+        {/* Summary Stats - Real Data Only */}
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Today's Overview</Text>
+          <Text style={styles.summaryTitle}>Real Device Status</Text>
           <View style={styles.summaryStats}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryNumber}>{metricsWithData.length}</Text>
-              <Text style={styles.summaryLabel}>Active Metrics</Text>
+              <Text style={[
+                styles.summaryNumber,
+                { color: realDataAvailable ? '#10B981' : '#EF4444' }
+              ]}>
+                {realMetricsWithData.length}
+              </Text>
+              <Text style={styles.summaryLabel}>Real Metrics Active</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
@@ -452,31 +584,43 @@ export const HealthDashboard = () => {
               <Text style={styles.summaryLabel}>{syncStatus.message}</Text>
             </View>
           </View>
+          
+          {!realDataAvailable && (
+            <View style={styles.noRealDataNotice}>
+              <Icon name="warning" size={20} color="#F59E0B" />
+              <Text style={styles.noRealDataText}>
+                Connect your ET475 or compatible smartwatch to see real health data. Demo data is not supported.
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Metrics Grid */}
+        {/* Metrics Grid - Real Data Only */}
         <View style={styles.metricsContainer}>
-          <Text style={styles.sectionTitle}>Health Metrics</Text>
+          <Text style={styles.sectionTitle}>
+            Health Metrics {realDataAvailable ? '(Real Device Data)' : '(Connect Real Device)'}
+          </Text>
           <View style={styles.metricsGrid}>
             {healthMetrics.map(metric => (
               <MetricCard
                 key={metric.key}
                 metric={metric}
-                data={healthData[metric.key] || {}}
+                data={healthData[metric.key] || { is_real: false }}
                 onPress={handleMetricPress}
+                isUserAuthenticated={authState.authenticated}
               />
             ))}
           </View>
         </View>
 
-        {/* Data source info */}
+        {/* Data source info - Real Data Only */}
         <View style={styles.dataSourceContainer}>
           <Icon name="info" size={16} color="#6B7280" />
           <Text style={styles.dataSourceText}>
-            Data synced from your connected smartwatch in real-time
-            {lastSyncTime && (
-              `\nLast sync: ${new Date(lastSyncTime).toLocaleString()}`
-            )}
+            {realDataAvailable 
+              ? `✓ Real data from your connected ET475 or compatible device${lastSyncTime ? `\nLast sync: ${new Date(lastSyncTime).toLocaleString()}` : '\nLive synchronization active'}`
+              : 'Connect your real ET475 or compatible smartwatch to view live health data. Demo data is not supported in this app.'
+            }
           </Text>
         </View>
       </ScrollView>
@@ -494,11 +638,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
+    paddingHorizontal: 40,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    marginTop: 8,
   },
   loadingText: {
     marginTop: 12,
@@ -627,6 +780,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     marginHorizontal: 20,
   },
+  noRealDataNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  noRealDataText: {
+    fontSize: 12,
+    color: '#92400E',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
   metricsContainer: {
     marginBottom: 20,
   },
@@ -652,7 +822,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
-    minHeight: 160,
+    minHeight: 180,
+    position: 'relative',
   },
   metricHeader: {
     flexDirection: 'row',
@@ -697,12 +868,27 @@ const styles = StyleSheet.create({
     color: '#10B981',
     textAlign: 'center',
     marginTop: 4,
+    fontWeight: '500',
   },
   noDataText: {
     fontSize: 10,
     color: '#9CA3AF',
     textAlign: 'center',
     marginTop: 8,
+  },
+  realDataBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  realDataBadgeText: {
+    fontSize: 8,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   dataSourceContainer: {
     flexDirection: 'row',

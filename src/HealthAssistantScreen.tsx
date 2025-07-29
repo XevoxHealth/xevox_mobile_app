@@ -39,7 +39,7 @@ export const HealthAssistantScreen = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm your AI health assistant. I can help you understand your health data, provide personalized recommendations, and answer questions about your wellness journey. How can I help you today?",
+      text: "Hello! I'm your AI health assistant. I analyze real health data from your connected ET475 or compatible smartwatch to provide personalized insights and recommendations. How can I help you today?",
       isUser: false,
       timestamp: new Date(),
       type: 'welcome'
@@ -47,56 +47,115 @@ export const HealthAssistantScreen = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [healthContext, setHealthContext] = useState(null);
+  const [realHealthContext, setRealHealthContext] = useState(null);
+  const [hasRealDevice, setHasRealDevice] = useState(false);
+  const [realDataAvailable, setRealDataAvailable] = useState(false);
   const scrollViewRef = useRef();
 
-  // Quick action buttons for common health questions
+  // Quick action buttons for real health data questions
   const quickActions = [
-    { id: 1, text: "How's my health today?", icon: "heart" },
-    { id: 2, text: "Give me health recommendations", icon: "checkmark-circle" },
-    { id: 3, text: "What should I focus on?", icon: "target" },
-    { id: 4, text: "Explain my chronic conditions", icon: "medical" }
+    { id: 1, text: "How's my real health data today?", icon: "heart", requiresRealData: true },
+    { id: 2, text: "Give me recommendations based on my device", icon: "checkmark-circle", requiresRealData: true },
+    { id: 3, text: "What should I focus on from my readings?", icon: "target", requiresRealData: true },
+    { id: 4, text: "Explain my chronic conditions from real data", icon: "medical", requiresRealData: true },
+    { id: 5, text: "Help me connect my ET475 device", icon: "bluetooth", requiresRealData: false },
+    { id: 6, text: "Why is real data important?", icon: "help", requiresRealData: false }
   ];
 
   useEffect(() => {
-    // Load health context when component mounts
-    loadHealthContext();
+    // Load real health context when component mounts
+    loadRealHealthContext();
   }, []);
 
-  const loadHealthContext = async () => {
+  const loadRealHealthContext = async () => {
     try {
-      console.log('Loading health context for chat...');
+      console.log('Loading REAL health context for chat...');
       
-      // Try to get current health data for context
+      // Check device status first
+      const deviceStatus = await api.getConnectedDevices();
+      const deviceConnected = deviceStatus.devices && deviceStatus.devices.length > 0;
+      setHasRealDevice(deviceConnected);
+      
+      if (!deviceConnected) {
+        console.log('No real device connected');
+        const noDeviceMessage = {
+          id: Date.now() + 500,
+          text: "I notice you don't have a real device connected yet. Connect your ET475 or compatible smartwatch to get personalized insights based on your actual health measurements. I can help you with the setup process!",
+          isUser: false,
+          timestamp: new Date(),
+          type: 'device_status'
+        };
+        
+        setTimeout(() => {
+          setMessages(prev => [...prev, noDeviceMessage]);
+        }, 1000);
+        return;
+      }
+      
+      // Try to get current real health data for context
       const healthData = await api.getHealthData('day');
       
       if (healthData) {
-        setHealthContext(healthData);
-        console.log('Health context loaded:', Object.keys(healthData));
-        
-        // Check if user has meaningful health data
-        const hasHealthData = Object.values(healthData).some(metric => 
-          metric && typeof metric === 'object' && metric.current_value > 0
+        // Validate that we have real data
+        const hasRealData = Object.values(healthData).some(metric => 
+          metric && typeof metric === 'object' && metric.is_real === true && 
+          (metric.current_value > 0 || metric.average > 0)
         );
         
-        if (hasHealthData) {
-          // Add a context message about available health data
+        setRealDataAvailable(hasRealData);
+        
+        if (hasRealData) {
+          setRealHealthContext(healthData);
+          console.log('Real health context loaded:', Object.keys(healthData).filter(k => 
+            healthData[k]?.is_real === true
+          ));
+          
+          // Add a context message about available real health data
+          const realDataCount = Object.keys(healthData).filter(k => 
+            healthData[k] && typeof healthData[k] === 'object' && healthData[k].is_real === true &&
+            (healthData[k].current_value > 0 || healthData[k].average > 0)
+          ).length;
+          
           const contextMessage = {
             id: Date.now() + 1000,
-            text: "I can see your recent health data from your connected device. Feel free to ask me about your metrics, trends, or what they mean for your health!",
+            text: `Great! I can see real health data from your connected device with ${realDataCount} active metrics. I can provide personalized insights and recommendations based on your actual measurements. Feel free to ask me about your health trends, readings, or what they mean!`,
             isUser: false,
             timestamp: new Date(),
-            type: 'context'
+            type: 'real_data_context'
           };
           
           setTimeout(() => {
             setMessages(prev => [...prev, contextMessage]);
-          }, 1000);
+          }, 1500);
+        } else {
+          console.log('Device connected but no real data available yet');
+          const waitingDataMessage = {
+            id: Date.now() + 1000,
+            text: "I can see your device is connected, but I'm waiting for real health measurements to come through. Make sure your ET475 is actively collecting data and try syncing it. Once I have your real data, I can provide much more personalized assistance!",
+            isUser: false,
+            timestamp: new Date(),
+            type: 'waiting_data'
+          };
+          
+          setTimeout(() => {
+            setMessages(prev => [...prev, waitingDataMessage]);
+          }, 1500);
         }
       }
     } catch (error) {
-      console.error('Error loading health context:', error);
+      console.error('Error loading real health context:', error);
       // Don't show error to user - just continue without health context
+      const errorMessage = {
+        id: Date.now() + 1000,
+        text: "I'm having trouble accessing your health data right now. Please ensure your ET475 device is connected and syncing properly. I can still help with general health questions!",
+        isUser: false,
+        timestamp: new Date(),
+        type: 'context_error'
+      };
+      
+      setTimeout(() => {
+        setMessages(prev => [...prev, errorMessage]);
+      }, 1000);
     }
   };
 
@@ -123,7 +182,7 @@ export const HealthAssistantScreen = () => {
     }, 100);
 
     try {
-      console.log('Sending message to backend:', textToSend);
+      console.log('Sending message to backend with real data context:', textToSend);
       
       // Send to backend chat API
       const response = await api.sendChatMessage(textToSend);
@@ -133,21 +192,36 @@ export const HealthAssistantScreen = () => {
       let assistantResponse;
       
       if (response.success && response.assistant_response) {
+        // Check if the response indicates real data was used
+        const usedRealData = response.health_context_used === true || 
+                            response.assistant_response.includes("real data") ||
+                            response.assistant_response.includes("Real data") ||
+                            response.assistant_response.includes("device data");
+        
         assistantResponse = {
           id: Date.now() + 1,
           text: response.assistant_response,
           isUser: false,
           timestamp: new Date(),
-          healthContextUsed: response.health_context_used || false
+          healthContextUsed: response.health_context_used || false,
+          usedRealData: usedRealData,
+          hasRealDataContext: realDataAvailable
         };
       } else {
-        // Fallback response
+        // Fallback response with real data context
+        const fallbackText = !hasRealDevice 
+          ? "I don't have access to your real health data yet. Please connect your ET475 or compatible smartwatch to get personalized insights based on your actual measurements."
+          : !realDataAvailable
+          ? "Your device is connected but I need real health measurements to provide personalized assistance. Make sure your ET475 is actively collecting and syncing data."
+          : "I'm having trouble processing your request right now. Please check that your real device is connected and try again.";
+          
         assistantResponse = {
           id: Date.now() + 1,
-          text: response.message || "I'm having trouble processing your request right now. Please try again in a moment.",
+          text: fallbackText,
           isUser: false,
           timestamp: new Date(),
-          type: 'error'
+          type: 'fallback',
+          hasRealDataContext: realDataAvailable
         };
       }
 
@@ -156,13 +230,24 @@ export const HealthAssistantScreen = () => {
     } catch (error) {
       console.error('Chat error:', error);
       
-      // Add error message
+      // Add error message with real data context
+      let errorText = "I'm experiencing some technical difficulties. ";
+      
+      if (!hasRealDevice) {
+        errorText += "Also, I notice you don't have a real device connected. Connect your ET475 for personalized health insights.";
+      } else if (!realDataAvailable) {
+        errorText += "Make sure your ET475 is syncing real health data for better assistance.";
+      } else {
+        errorText += "Please check your connection and try again.";
+      }
+      
       const errorMessage = {
         id: Date.now() + 1,
-        text: "I'm experiencing some technical difficulties connecting to the server. Please check your connection and try again.",
+        text: errorText,
         isUser: false,
         timestamp: new Date(),
-        type: 'error'
+        type: 'error',
+        hasRealDataContext: realDataAvailable
       };
       
       setMessages(prev => [...prev, errorMessage]);
@@ -178,52 +263,113 @@ export const HealthAssistantScreen = () => {
 
   const handleQuickAction = (action) => {
     console.log('Quick action pressed:', action.text);
+    
+    // Check if action requires real data
+    if (action.requiresRealData && !realDataAvailable) {
+      Alert.alert(
+        'Real Device Data Required',
+        `To ${action.text.toLowerCase()}, I need real health data from your connected ET475 or compatible smartwatch.\n\nCurrently: ${
+          !hasRealDevice 
+            ? 'No device connected' 
+            : 'Device connected but no real data available'
+        }`,
+        [
+          { text: 'OK' },
+          { 
+            text: 'Help Connect', 
+            onPress: () => sendMessage("Help me connect my ET475 device") 
+          }
+        ]
+      );
+      return;
+    }
+    
     sendMessage(action.text);
   };
 
-  const getHealthInsights = async () => {
+  const getRealHealthInsights = async () => {
+    if (!realDataAvailable) {
+      Alert.alert(
+        'Real Data Required',
+        'I need real health data from your ET475 device to provide insights. Please ensure your device is connected and syncing data.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsTyping(true);
       
-      console.log('Getting health insights...');
+      console.log('Getting real health insights...');
       const insights = await api.getObservations();
       
       const insightsMessage = {
         id: Date.now(),
-        text: insights.observations || "No health insights available right now. Make sure your device is connected and has recent data.",
+        text: insights.observations || "No real health insights available right now. Make sure your ET475 is connected and has recent data.",
         isUser: false,
         timestamp: new Date(),
-        type: 'insights'
+        type: 'real_insights',
+        hasRealDataContext: true
       };
       
       setMessages(prev => [...prev, insightsMessage]);
       
     } catch (error) {
-      console.error('Error getting insights:', error);
+      console.error('Error getting real insights:', error);
+      
+      const errorMessage = {
+        id: Date.now(),
+        text: "I couldn't access your real health insights right now. Please check that your ET475 device is connected and syncing data.",
+        isUser: false,
+        timestamp: new Date(),
+        type: 'error'
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const getHealthRecommendations = async () => {
+  const getRealHealthRecommendations = async () => {
+    if (!realDataAvailable) {
+      Alert.alert(
+        'Real Data Required',
+        'I need real health data from your ET475 device to provide personalized recommendations. Please ensure your device is connected and syncing data.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsTyping(true);
       
-      console.log('Getting health recommendations...');
+      console.log('Getting real health recommendations...');
       const recommendations = await api.getRecommendations();
       
       const recommendationsMessage = {
         id: Date.now(),
-        text: recommendations.recommendations || "No recommendations available right now. Connect your device and sync some health data to get personalized advice.",
+        text: recommendations.recommendations || "No personalized recommendations available right now. Connect your ET475 and sync some real health data to get tailored advice.",
         isUser: false,
         timestamp: new Date(),
-        type: 'recommendations'
+        type: 'real_recommendations',
+        hasRealDataContext: true
       };
       
       setMessages(prev => [...prev, recommendationsMessage]);
       
     } catch (error) {
-      console.error('Error getting recommendations:', error);
+      console.error('Error getting real recommendations:', error);
+      
+      const errorMessage = {
+        id: Date.now(),
+        text: "I couldn't access your personalized recommendations right now. Please ensure your ET475 device is connected and syncing real data.",
+        isUser: false,
+        timestamp: new Date(),
+        type: 'error'
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
     }
@@ -232,9 +378,11 @@ export const HealthAssistantScreen = () => {
   const renderMessage = (message) => {
     const isUser = message.isUser;
     const isError = message.type === 'error';
-    const isInsights = message.type === 'insights';
-    const isRecommendations = message.type === 'recommendations';
+    const isRealInsights = message.type === 'real_insights';
+    const isRealRecommendations = message.type === 'real_recommendations';
     const isWelcome = message.type === 'welcome';
+    const hasRealDataContext = message.hasRealDataContext;
+    const usedRealData = message.usedRealData;
     
     return (
       <View key={message.id} style={[
@@ -255,8 +403,8 @@ export const HealthAssistantScreen = () => {
           styles.messageContent,
           isUser ? styles.userMessageContent : styles.assistantMessageContent,
           isError && styles.errorMessageContent,
-          isInsights && styles.insightsMessageContent,
-          isRecommendations && styles.recommendationsMessageContent
+          isRealInsights && styles.realInsightsMessageContent,
+          isRealRecommendations && styles.realRecommendationsMessageContent
         ]}>
           <Text style={[
             styles.messageText,
@@ -266,9 +414,31 @@ export const HealthAssistantScreen = () => {
             {message.text}
           </Text>
           
+          {/* Real Data Context Indicators */}
+          {!isUser && hasRealDataContext && usedRealData && (
+            <View style={styles.realDataBadge}>
+              <Icon name="checkmark" size={12} color="#FFFFFF" />
+              <Text style={styles.realDataBadgeText}>Based on your real ET475 data</Text>
+            </View>
+          )}
+          
+          {!isUser && hasRealDevice && !hasRealDataContext && !message.type && (
+            <View style={styles.waitingDataBadge}>
+              <Icon name="clock" size={12} color="#FFFFFF" />
+              <Text style={styles.waitingDataBadgeText}>Waiting for real device data</Text>
+            </View>
+          )}
+          
+          {!isUser && !hasRealDevice && !message.type && (
+            <View style={styles.noDeviceBadge}>
+              <Icon name="bluetooth" size={12} color="#FFFFFF" />
+              <Text style={styles.noDeviceBadgeText}>Connect ET475 for personalized insights</Text>
+            </View>
+          )}
+          
           {message.healthContextUsed && (
             <Text style={styles.contextIndicator}>
-              ✓ Based on your real-time health data
+              ✓ Analyzed using your real device measurements
             </Text>
           )}
           
@@ -284,7 +454,7 @@ export const HealthAssistantScreen = () => {
   };
 
   const renderQuickActions = () => {
-    if (messages.length > 2) return null; // Only show for new conversations
+    if (messages.length > 3) return null; // Only show for new conversations
     
     return (
       <View style={styles.quickActionsContainer}>
@@ -293,31 +463,92 @@ export const HealthAssistantScreen = () => {
           {quickActions.map(action => (
             <TouchableOpacity
               key={action.id}
-              style={styles.quickActionButton}
+              style={[
+                styles.quickActionButton,
+                action.requiresRealData && !realDataAvailable && styles.quickActionButtonDisabled
+              ]}
               onPress={() => handleQuickAction(action)}
             >
-              <Icon name={action.icon} size={20} color="#4F46E5" />
-              <Text style={styles.quickActionText}>{action.text}</Text>
+              <Icon 
+                name={action.icon} 
+                size={20} 
+                color={action.requiresRealData && !realDataAvailable ? "#9CA3AF" : "#4F46E5"} 
+              />
+              <Text style={[
+                styles.quickActionText,
+                action.requiresRealData && !realDataAvailable && styles.quickActionTextDisabled
+              ]}>
+                {action.text}
+              </Text>
+              {action.requiresRealData && !realDataAvailable && (
+                <View style={styles.requiresDataIndicator}>
+                  <Text style={styles.requiresDataText}>Needs real data</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
         
         <View style={styles.specialActionsRow}>
           <TouchableOpacity
-            style={styles.specialActionButton}
-            onPress={getHealthInsights}
+            style={[
+              styles.specialActionButton,
+              !realDataAvailable && styles.specialActionButtonDisabled
+            ]}
+            onPress={getRealHealthInsights}
+            disabled={!realDataAvailable}
           >
-            <Icon name="eye" size={16} color="#10B981" />
-            <Text style={styles.specialActionText}>Get Insights</Text>
+            <Icon 
+              name="eye" 
+              size={16} 
+              color={realDataAvailable ? "#10B981" : "#9CA3AF"} 
+            />
+            <Text style={[
+              styles.specialActionText,
+              !realDataAvailable && styles.specialActionTextDisabled
+            ]}>
+              Real Insights
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.specialActionButton}
-            onPress={getHealthRecommendations}
+            style={[
+              styles.specialActionButton,
+              !realDataAvailable && styles.specialActionButtonDisabled
+            ]}
+            onPress={getRealHealthRecommendations}
+            disabled={!realDataAvailable}
           >
-            <Icon name="bulb" size={16} color="#F59E0B" />
-            <Text style={styles.specialActionText}>Get Tips</Text>
+            <Icon 
+              name="bulb" 
+              size={16} 
+              color={realDataAvailable ? "#F59E0B" : "#9CA3AF"} 
+            />
+            <Text style={[
+              styles.specialActionText,
+              !realDataAvailable && styles.specialActionTextDisabled
+            ]}>
+              Real Tips
+            </Text>
           </TouchableOpacity>
+        </View>
+        
+        {/* Real Data Status */}
+        <View style={styles.dataStatusContainer}>
+          <Icon 
+            name={hasRealDevice ? (realDataAvailable ? "checkmark-circle" : "time") : "warning"} 
+            size={16} 
+            color={hasRealDevice ? (realDataAvailable ? "#10B981" : "#F59E0B") : "#EF4444"} 
+          />
+          <Text style={styles.dataStatusText}>
+            {hasRealDevice 
+              ? (realDataAvailable 
+                  ? "Real ET475 data available" 
+                  : "Device connected, waiting for data"
+                )
+              : "Connect your ET475 for personalized assistance"
+            }
+          </Text>
         </View>
       </View>
     );
@@ -337,7 +568,12 @@ export const HealthAssistantScreen = () => {
             <View style={[styles.typingDot, { animationDelay: '150ms' }]} />
             <View style={[styles.typingDot, { animationDelay: '300ms' }]} />
           </View>
-          <Text style={styles.typingText}>AI Assistant is typing...</Text>
+          <Text style={styles.typingText}>
+            {realDataAvailable 
+              ? "AI Assistant is analyzing your real data..." 
+              : "AI Assistant is typing..."
+            }
+          </Text>
         </View>
       </View>
     );
@@ -353,20 +589,56 @@ export const HealthAssistantScreen = () => {
           </View>
           <View>
             <Text style={styles.assistantName}>Health Assistant</Text>
-            <Text style={styles.assistantStatus}>
-              {healthContext ? 'Ready with your health data' : 'Online'}
+            <Text style={[
+              styles.assistantStatus,
+              { color: hasRealDevice ? (realDataAvailable ? '#10B981' : '#F59E0B') : '#EF4444' }
+            ]}>
+              {hasRealDevice 
+                ? (realDataAvailable ? 'Ready with your real data' : 'Waiting for real data') 
+                : 'Connect ET475 for personalized insights'
+              }
             </Text>
           </View>
         </View>
         
-        {healthContext && (
-          <TouchableOpacity 
-            style={styles.healthDataIndicator}
-            onPress={() => Alert.alert('Health Data', 'Your recent health data is available for personalized assistance')}
-          >
-            <Icon name="heart" size={16} color="#10B981" />
-          </TouchableOpacity>
-        )}
+        {/* Real Data Indicator */}
+        <View style={styles.headerIndicators}>
+          {realDataAvailable && (
+            <TouchableOpacity 
+              style={styles.realDataIndicator}
+              onPress={() => Alert.alert(
+                'Real Data Active', 
+                'Your ET475 device is connected and providing real health measurements for personalized assistance.'
+              )}
+            >
+              <Icon name="heart" size={16} color="#10B981" />
+            </TouchableOpacity>
+          )}
+          
+          {hasRealDevice && !realDataAvailable && (
+            <TouchableOpacity 
+              style={styles.waitingDataIndicator}
+              onPress={() => Alert.alert(
+                'Waiting for Data', 
+                'Your device is connected but waiting for real health measurements. Make sure your ET475 is actively collecting data.'
+              )}
+            >
+              <Icon name="clock" size={16} color="#F59E0B" />
+            </TouchableOpacity>
+          )}
+          
+          {!hasRealDevice && (
+            <TouchableOpacity 
+              style={styles.noDeviceIndicator}
+              onPress={() => Alert.alert(
+                'No Device Connected', 
+                'Connect your ET475 or compatible smartwatch to get personalized health insights based on real measurements.'
+              )}
+            >
+              <Icon name="bluetooth" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <KeyboardAvoidingView 
@@ -392,7 +664,12 @@ export const HealthAssistantScreen = () => {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.chatInput}
-            placeholder="Ask about your health..."
+            placeholder={realDataAvailable 
+              ? "Ask about your real health data..." 
+              : hasRealDevice 
+              ? "Ask me anything (connect ET475 for personalized insights)..." 
+              : "Ask me anything (connect ET475 for real data insights)..."
+            }
             placeholderTextColor="#9CA3AF"
             value={inputText}
             onChangeText={setInputText}
@@ -458,12 +735,28 @@ const styles = StyleSheet.create({
   },
   assistantStatus: {
     fontSize: 14,
-    color: '#10B981',
+    fontWeight: '500',
   },
-  healthDataIndicator: {
+  headerIndicators: {
+    flexDirection: 'row',
+  },
+  realDataIndicator: {
     padding: 8,
     backgroundColor: '#F0FDF4',
     borderRadius: 20,
+    marginLeft: 8,
+  },
+  waitingDataIndicator: {
+    padding: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  noDeviceIndicator: {
+    padding: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 20,
+    marginLeft: 8,
   },
   chatContainer: {
     flex: 1,
@@ -501,6 +794,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 18,
+    position: 'relative',
   },
   userMessageContent: {
     backgroundColor: '#4F46E5',
@@ -520,12 +814,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
   },
-  insightsMessageContent: {
+  realInsightsMessageContent: {
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
   },
-  recommendationsMessageContent: {
+  realRecommendationsMessageContent: {
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#FED7AA',
@@ -542,6 +836,54 @@ const styles = StyleSheet.create({
   },
   errorMessageText: {
     color: '#DC2626',
+  },
+  realDataBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  realDataBadgeText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  waitingDataBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  waitingDataBadgeText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  noDeviceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  noDeviceBadgeText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    marginLeft: 4,
+    fontWeight: '600',
   },
   contextIndicator: {
     fontSize: 12,
@@ -617,7 +959,7 @@ const styles = StyleSheet.create({
   },
   quickActionButton: {
     width: '48%',
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     padding: 12,
     marginBottom: 8,
@@ -625,12 +967,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    minHeight: 80,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  quickActionButtonDisabled: {
+    opacity: 0.5,
   },
   quickActionText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#4F46E5',
-    marginLeft: 8,
-    flex: 1,
+    marginTop: 6,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  quickActionTextDisabled: {
+    color: '#9CA3AF',
+  },
+  requiresDataIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  requiresDataText: {
+    fontSize: 8,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   specialActionsRow: {
     flexDirection: 'row',
@@ -648,11 +1014,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 20,
   },
+  specialActionButtonDisabled: {
+    opacity: 0.5,
+  },
   specialActionText: {
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 6,
     color: '#374151',
+  },
+  specialActionTextDisabled: {
+    color: '#9CA3AF',
+  },
+  dataStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  dataStatusText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 6,
+    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'row',

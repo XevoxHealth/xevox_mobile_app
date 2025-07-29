@@ -11,76 +11,125 @@ import {
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Context Providers
-import { AuthProvider, HealthProvider, useAuth } from './src/context';
+// Try to import from the main context first, fallback to simple
+let AuthProvider, HealthProvider, useAuth;
+try {
+  const context = require('./src/context');
+  AuthProvider = context.AuthProvider;
+  HealthProvider = context.HealthProvider;
+  useAuth = context.useAuth;
+  console.log('✅ Loaded main context');
+} catch (e) {
+  console.warn('⚠️ Main context failed, using simple context:', e.message);
+  const simpleContext = require('./src/context');
+  AuthProvider = simpleContext.AuthProvider;
+  HealthProvider = simpleContext.HealthProvider;
+  useAuth = simpleContext.useAuth;
+}
 
-// Screen Components - Fixed imports
-import { WelcomeScreen, LoginScreen, RegisterScreen } from './src/authScreens';
-import { HomeScreen } from './src/HomeScreen';
-import { HealthAssistantScreen } from './src/HealthAssistantScreen';
-import { ChronicMonitorsScreen } from './src/ChronicMonitorScreen';
-import { ProfileScreen } from './src/ProfileScreen';
+// Try to import screens, create fallbacks if they fail
+let WelcomeScreen, LoginScreen, RegisterScreen, HomeScreen, HealthAssistantScreen, ChronicMonitorsScreen, ProfileScreen;
+
+try {
+  const authScreens = require('./src/authScreens');
+  WelcomeScreen = authScreens.WelcomeScreen;
+  LoginScreen = authScreens.LoginScreen;
+  RegisterScreen = authScreens.RegisterScreen;
+  console.log('✅ Loaded auth screens');
+} catch (e) {
+  console.warn('⚠️ Auth screens failed, using fallbacks:', e.message);
+  // Create simple fallback screens
+  WelcomeScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Welcome to XEVOX</Text>
+      <Text style={styles.fallbackText}>Your health monitoring app</Text>
+    </View>
+  );
+  LoginScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Login Screen</Text>
+      <Text style={styles.fallbackText}>Login functionality coming soon</Text>
+    </View>
+  );
+  RegisterScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Register Screen</Text>
+      <Text style={styles.fallbackText}>Registration functionality coming soon</Text>
+    </View>
+  );
+}
+
+try {
+  const homeScreen = require('./src/HomeScreen');
+  HomeScreen = homeScreen.HomeScreen;
+  console.log('✅ Loaded HomeScreen');
+} catch (e) {
+  console.warn('⚠️ HomeScreen failed, using fallback:', e.message);
+  HomeScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Home</Text>
+      <Text style={styles.fallbackText}>Your health dashboard</Text>
+    </View>
+  );
+}
+
+try {
+  const healthAssistant = require('./src/HealthAssistantScreen');
+  HealthAssistantScreen = healthAssistant.HealthAssistantScreen;
+  console.log('✅ Loaded HealthAssistantScreen');
+} catch (e) {
+  console.warn('⚠️ HealthAssistantScreen failed, using fallback:', e.message);
+  HealthAssistantScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Health Assistant</Text>
+      <Text style={styles.fallbackText}>AI health assistant coming soon</Text>
+    </View>
+  );
+}
+
+try {
+  const chronicMonitors = require('./src/ChronicMonitorScreen');
+  ChronicMonitorsScreen = chronicMonitors.ChronicMonitorsScreen;
+  console.log('✅ Loaded ChronicMonitorsScreen');
+} catch (e) {
+  console.warn('⚠️ ChronicMonitorsScreen failed, using fallback:', e.message);
+  ChronicMonitorsScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Chronic Monitors</Text>
+      <Text style={styles.fallbackText}>Health monitoring coming soon</Text>
+    </View>
+  );
+}
+
+try {
+  const profileScreen = require('./src/ProfileScreen');
+  ProfileScreen = profileScreen.ProfileScreen;
+  console.log('✅ Loaded ProfileScreen');
+} catch (e) {
+  console.warn('⚠️ ProfileScreen failed, using fallback:', e.message);
+  ProfileScreen = () => (
+    <View style={styles.fallbackScreen}>
+      <Text style={styles.fallbackTitle}>Profile</Text>
+      <Text style={styles.fallbackText}>User profile coming soon</Text>
+    </View>
+  );
+}
 
 // Navigation Stack and Tab Instances
 const AuthStackNavigator = createStackNavigator();
 const MainTabNavigator = createBottomTabNavigator();
 
-// Custom Icon Component
-const TabIcon = ({ name, size = 22, color = '#000', focused = false }) => {
-  const getIconShape = (iconName) => {
-    const iconStyle = {
-      backgroundColor: color,
-      width: size,
-      height: size,
-      borderRadius: size / 4,
-      justifyContent: 'center',
-      alignItems: 'center',
-      opacity: focused ? 1 : 0.6,
-    };
-
-    const innerStyle = {
-      backgroundColor: '#fff',
-      borderRadius: 2,
-    };
-
-    switch (iconName) {
-      case 'home':
-        return (
-          <View style={iconStyle}>
-            <View style={[innerStyle, { width: size * 0.5, height: size * 0.5 }]} />
-          </View>
-        );
-      case 'chatbubble':
-        return (
-          <View style={iconStyle}>
-            <View style={[innerStyle, { width: size * 0.6, height: size * 0.4, borderRadius: 6 }]} />
-          </View>
-        );
-      case 'heart':
-        return (
-          <View style={iconStyle}>
-            <View style={[innerStyle, { width: size * 0.5, height: size * 0.5, borderRadius: size * 0.25 }]} />
-          </View>
-        );
-      case 'person':
-        return (
-          <View style={iconStyle}>
-            <View style={[innerStyle, { width: size * 0.55, height: size * 0.55, borderRadius: size * 0.275 }]} />
-          </View>
-        );
-      default:
-        return (
-          <View style={iconStyle}>
-            <View style={[innerStyle, { width: size * 0.5, height: size * 0.5 }]} />
-          </View>
-        );
-    }
-  };
-
-  return getIconShape(name);
-};
+// Simple Icon Component
+const TabIcon = ({ color, size = 22 }) => (
+  <View style={{
+    backgroundColor: color,
+    width: size,
+    height: size,
+    borderRadius: size / 4,
+  }} />
+);
 
 // Loading Screen Component
 const LoadingScreen = () => (
@@ -90,167 +139,47 @@ const LoadingScreen = () => (
   </View>
 );
 
-// Error Boundary Component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('App Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Something went wrong</Text>
-          <Text style={styles.errorMessage}>
-            The app encountered an unexpected error. Please restart the application.
-          </Text>
-        </View>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-// Custom Tab Button Component - FIXED FOR NAVIGATION CONFLICTS
-const CustomTabButton = ({ children, onPress, style, accessibilityLabel, ...props }) => {
-  const insets = useSafeAreaInsets();
-  
-  return (
-    <TouchableOpacity
-      {...props}
-      style={[
-        {
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingVertical: 6,
-          paddingBottom: Math.max(6, insets.bottom * 0.3), // Adjust for safe area
-          minHeight: 50,
-        },
-        style
-      ]}
-      onPress={(e) => {
-        console.log('Tab pressed:', accessibilityLabel);
-        if (onPress) {
-          onPress(e);
-        }
-      }}
-      activeOpacity={0.7}
-    >
-      {children}
-    </TouchableOpacity>
-  );
-};
-
-// Main Tab Navigator Configuration - FIXED POSITIONING
+// Main Tab Navigator Configuration
 const MainTabsNavigator = () => {
-  const insets = useSafeAreaInsets();
-  
   return (
     <MainTabNavigator.Navigator
       initialRouteName="Home"
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size, focused }) => {
-          let iconName = 'home';
-          
-          switch (route.name) {
-            case 'Home':
-              iconName = 'home';
-              break;
-            case 'HealthAssistant':
-              iconName = 'chatbubble';
-              break;
-            case 'ChronicMonitors':
-              iconName = 'heart';
-              break;
-            case 'Profile':
-              iconName = 'person';
-              break;
-          }
-          
-          return <TabIcon name={iconName} size={size || 22} color={color} focused={focused} />;
-        },
+      screenOptions={{
         tabBarActiveTintColor: '#4F46E5',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          paddingTop: 8,
-          // FIXED: Proper safe area handling
-          paddingBottom: Math.max(8, insets.bottom), 
-          height: Platform.select({
-            ios: 80 + insets.bottom,
-            android: 65,
-            default: 65
-          }),
-          // FIXED: Remove absolute positioning to prevent conflicts
-          position: 'relative',
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 2,
-          marginBottom: Platform.OS === 'ios' ? 2 : 4,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 2,
-        },
         headerShown: false,
-        tabBarHideOnKeyboard: Platform.OS === 'android',
-        // Custom tab button to handle touch properly
-        tabBarButton: (props) => <CustomTabButton {...props} />,
-      })}
+      }}
     >
       <MainTabNavigator.Screen 
         name="Home" 
         component={HomeScreen}
-        options={{
+        options={{ 
           tabBarLabel: 'Home',
-          tabBarAccessibilityLabel: 'Home Tab',
-          tabBarTestID: 'home-tab',
+          tabBarIcon: ({ color, size }) => <TabIcon color={color} size={size} />
         }}
       />
       <MainTabNavigator.Screen 
         name="HealthAssistant" 
         component={HealthAssistantScreen}
-        options={{
+        options={{ 
           tabBarLabel: 'Assistant',
-          tabBarAccessibilityLabel: 'Health Assistant Tab',
-          tabBarTestID: 'assistant-tab',
+          tabBarIcon: ({ color, size }) => <TabIcon color={color} size={size} />
         }}
       />
       <MainTabNavigator.Screen 
         name="ChronicMonitors" 
         component={ChronicMonitorsScreen}
-        options={{
+        options={{ 
           tabBarLabel: 'Monitors',
-          tabBarAccessibilityLabel: 'Chronic Monitors Tab',
-          tabBarTestID: 'monitors-tab',
+          tabBarIcon: ({ color, size }) => <TabIcon color={color} size={size} />
         }}
       />
       <MainTabNavigator.Screen 
         name="Profile" 
         component={ProfileScreen}
-        options={{
+        options={{ 
           tabBarLabel: 'Profile',
-          tabBarAccessibilityLabel: 'Profile Tab',
-          tabBarTestID: 'profile-tab',
+          tabBarIcon: ({ color, size }) => <TabIcon color={color} size={size} />
         }}
       />
     </MainTabNavigator.Navigator>
@@ -265,74 +194,35 @@ const AuthStackNavigator_Component = () => {
       screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: '#F9FAFB' },
-        gestureEnabled: true,
-        cardStyleInterpolator: ({ current, layouts }) => {
-          return {
-            cardStyle: {
-              transform: [
-                {
-                  translateX: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [layouts.screen.width, 0],
-                  }),
-                },
-              ],
-            },
-          };
-        },
       }}
     >
-      <AuthStackNavigator.Screen 
-        name="Welcome" 
-        component={WelcomeScreen}
-        options={{ 
-          title: 'Welcome to XEVOX',
-          cardStyleInterpolator: ({ current }) => ({
-            cardStyle: {
-              opacity: current.progress,
-            },
-          }),
-        }}
-      />
-      <AuthStackNavigator.Screen 
-        name="Login" 
-        component={LoginScreen}
-        options={{ title: 'Sign In' }}
-      />
-      <AuthStackNavigator.Screen 
-        name="Register" 
-        component={RegisterScreen}
-        options={{ title: 'Create Account' }}
-      />
+      <AuthStackNavigator.Screen name="Welcome" component={WelcomeScreen} />
+      <AuthStackNavigator.Screen name="Login" component={LoginScreen} />
+      <AuthStackNavigator.Screen name="Register" component={RegisterScreen} />
     </AuthStackNavigator.Navigator>
   );
 };
 
-// Main App Content with Navigation - FIXED CONTAINER
+// Main App Content with Navigation
 const AppNavigationContent = () => {
   const { authState } = useAuth();
-  const insets = useSafeAreaInsets();
 
-  console.log('🔍 App Navigation - Auth State:', {
-    authenticated: authState.authenticated,
-    isLoading: authState.isLoading,
-    hasUser: !!authState.user
-  });
+  console.log('🔍 App Navigation - Auth State:', authState);
 
   // Show loading screen while checking auth state
-  if (authState.isLoading) {
+  if (authState?.isLoading) {
     return <LoadingScreen />;
   }
 
   return (
-    <View style={[styles.appContainer, { paddingTop: insets.top }]}>
+    <View style={styles.appContainer}>
       <StatusBar 
         barStyle="light-content"
         backgroundColor="#4F46E5"
         translucent={false}
       />
       <NavigationContainer>
-        {authState.authenticated ? <MainTabsNavigator /> : <AuthStackNavigator_Component />}
+        {authState?.authenticated ? <MainTabsNavigator /> : <AuthStackNavigator_Component />}
       </NavigationContainer>
     </View>
   );
@@ -340,30 +230,25 @@ const AppNavigationContent = () => {
 
 // Main App Component with Provider Hierarchy
 const App = () => {
-  console.log('🚀 App starting...');
+  console.log('🚀 XEVOX Health App starting (simple test version)...');
   
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <AuthProvider>
-          <HealthProvider>
-            <AppNavigationContent />
-          </HealthProvider>
-        </AuthProvider>
-      </ErrorBoundary>
+      <AuthProvider>
+        <HealthProvider>
+          <AppNavigationContent />
+        </HealthProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 };
 
-// Stylesheet for components - FIXED FOR NAVIGATION
+// Stylesheet
 const styles = StyleSheet.create({
-  // App Container - FIXED
   appContainer: {
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  
-  // Loading Screen Styles
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -378,25 +263,23 @@ const styles = StyleSheet.create({
     color: '#4F46E5',
     textAlign: 'center',
   },
-  
-  // Error Screen Styles
-  errorContainer: {
+  fallbackScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#F9FAFB',
     paddingHorizontal: 40,
   },
-  errorTitle: {
+  fallbackTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#DC2626',
+    color: '#1F2937',
     marginBottom: 16,
     textAlign: 'center',
   },
-  errorMessage: {
+  fallbackText: {
     fontSize: 16,
-    color: '#7F1D1D',
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
   },

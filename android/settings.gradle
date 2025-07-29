@@ -1,12 +1,21 @@
 pluginManagement {
-    includeBuild("../node_modules/@react-native/gradle-plugin")
-}
-plugins {
-    id("com.facebook.react.settings")
-}
-extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-    ex.autolinkLibrariesFromCommand()
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
 
-rootProject.name = 'xevox_mobile_app'
+rootProject.name = 'xevoxmobileapp'
 include ':app'
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://www.jitpack.io' }
+        maven { url "https://maven.google.com" }
+        maven { url "https://repo1.maven.org/maven2/" }
+    }
+}
